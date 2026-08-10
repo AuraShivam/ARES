@@ -1,2 +1,2 @@
 # ARES
-Agentic AI platform for autonomous supply chain resilience using Digital Twin, Multi-Agent AI, and SAP S/4HANA integration...
+Agentic AI platform for autonomous supply chain resilience using Digital Twin, Multi-Agent AI, and SAP S/4HANA integration.
