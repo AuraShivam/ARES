@@ -1,7 +1,9 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from hashlib import sha1
 from django.core.management.base import BaseCommand
-from supply_chain.models import Disruption, Inventory, Material, PurchaseOrder, Shipment, Supplier
+from supply_chain.models import (Disruption, Inventory, Material, PurchaseOrder,
+                                 PurchaseOrderLine, Shipment, Supplier, Warehouse)
 
 
 class Command(BaseCommand):
@@ -16,12 +18,22 @@ class Command(BaseCommand):
             "name": "Industrial drive motor", "category": "Critical components", "unit": "EA", "criticality": "high", "preferred_supplier": north})
         resin, _ = Material.objects.update_or_create(sku="RES-210", defaults={
             "name": "Engineering resin pellets", "category": "Raw materials", "unit": "KG", "criticality": "medium", "preferred_supplier": pacific})
-        Inventory.objects.update_or_create(material=motor, location="Berlin DC", defaults={"quantity": Decimal("48"), "reorder_point": Decimal("30"), "unit_cost": Decimal("420")})
-        Inventory.objects.update_or_create(material=resin, location="Singapore Hub", defaults={"quantity": Decimal("120"), "reorder_point": Decimal("160"), "unit_cost": Decimal("8.75")})
+        berlin, _ = Warehouse.objects.update_or_create(code="WH-BERLIN", defaults={
+            "name": "Berlin DC", "region": "Europe", "country": "Germany", "warehouse_type": "distribution", "active": True})
+        singapore, _ = Warehouse.objects.update_or_create(code="WH-SINGAPORE", defaults={
+            "name": "Singapore Hub", "region": "Southeast Asia", "country": "Singapore", "warehouse_type": "distribution", "active": True})
+        Inventory.objects.update_or_create(material=motor, location="Berlin DC", defaults={"warehouse": berlin, "quantity": Decimal("48"), "reorder_point": Decimal("30"), "unit_cost": Decimal("420")})
+        Inventory.objects.update_or_create(material=resin, location="Singapore Hub", defaults={"warehouse": singapore, "quantity": Decimal("120"), "reorder_point": Decimal("160"), "unit_cost": Decimal("8.75")})
+        legacy_codes = [f"LOC-{sha1(label.casefold().encode('utf-8')).hexdigest()[:12].upper()}" for label in ("Berlin DC", "Singapore Hub")]
+        Warehouse.objects.filter(code__in=legacy_codes, inventory__isnull=True).delete()
         po1, _ = PurchaseOrder.objects.update_or_create(number="PO-2026-1042", defaults={
             "supplier": north, "material": motor, "quantity": Decimal("80"), "expected_date": date.today() + timedelta(days=8), "status": "in_transit", "currency": "EUR", "unit_price": Decimal("420")})
         po2, _ = PurchaseOrder.objects.update_or_create(number="PO-2026-1043", defaults={
             "supplier": pacific, "material": resin, "quantity": Decimal("400"), "expected_date": date.today() + timedelta(days=19), "status": "delayed", "currency": "USD", "unit_price": Decimal("8.75")})
+        PurchaseOrderLine.objects.update_or_create(purchase_order=po1, line_number=1, defaults={
+            "material": motor, "quantity": Decimal("80"), "received_quantity": Decimal("0"), "unit_price": Decimal("420")})
+        PurchaseOrderLine.objects.update_or_create(purchase_order=po2, line_number=1, defaults={
+            "material": resin, "quantity": Decimal("400"), "received_quantity": Decimal("0"), "unit_price": Decimal("8.75")})
         ship, _ = Shipment.objects.update_or_create(reference="SHP-7781", defaults={
             "purchase_order": po2, "origin": "Kaohsiung", "destination": "Singapore Hub", "carrier": "OceanBridge", "eta": date.today() + timedelta(days=19), "status": "delayed", "risk_score": 74})
         Disruption.objects.update_or_create(title="Port congestion in East Asia", defaults={
