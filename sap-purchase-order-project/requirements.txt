@@ -1,5 +1,0 @@
-Django==5.2.18
-djangorestframework==3.18.3
-django-cors-headers==4.9.0
-asgiref==3.12.1
-sqlparse==0.6.0
