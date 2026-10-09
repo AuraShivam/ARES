@@ -1,0 +1,19 @@
+# Python environment, cache, and local database
+.venv/
+**/.venv/
+__pycache__/
+*.py[cod]
+**/db.sqlite3
+
+# Frontend dependencies and build output
+**/node_modules/
+**/dist/
+
+# Local configuration and logs
+.env
+*.log
+.DS_Store
+.pnpm-store/
+
+# Supplied reference PDFs stay in the workspace but out of source history.
+/*.pdf
