@@ -1,6 +1,9 @@
+.venv/
 venv/
-.env
 __pycache__/
-*.pyc
+*.py[cod]
 db.sqlite3
+.env
+frontend/node_modules/
+frontend/dist/
 .DS_Store
