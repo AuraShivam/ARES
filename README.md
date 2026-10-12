@@ -176,6 +176,22 @@ The exact contents may change as development progresses.
 
 Getting Started
 
+Quick Start with Docker (recommended)
+
+The repository includes a demo Compose stack that boots the API, web app, PostgreSQL, Redis, and GDACS worker together.
+
+1. Copy the sample environment file:
+
+cp .env.demo.example .env.demo
+
+2. Start the stack:
+
+docker compose -f compose.demo.yaml up --build
+
+The demo frontend is served at http://127.0.0.1:8080 and the API is exposed through the frontend proxy at http://127.0.0.1:8080/api.
+
+If you want to inspect or customize the production deployment setup instead, copy `.env.production.example` to `.env.production` and use `docker compose -f compose.production.yaml ...` with the corresponding environment values.
+
 Prerequisites
 
 Install the following tools:
@@ -200,7 +216,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-Create a local environment file:
+Create a local environment file from the included template:
 
 cp .env.example .env
 
@@ -252,11 +268,7 @@ pnpm run dev
 
 Open the local URL printed by Vite.
 
-The frontend is expected to communicate with the backend API at:
-
-http://127.0.0.1:8000/api
-
-If your backend runs at another address, configure VITE_API_BASE_URL according to the frontend configuration.
+The frontend expects the backend API at http://127.0.0.1:8000/api. If your backend runs elsewhere, set `VITE_API_BASE_URL` in the frontend environment or deployment config.
 
 6. Synchronize Disaster Alerts
 
