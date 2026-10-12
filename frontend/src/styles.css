@@ -535,6 +535,42 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .sign-out-button { min-height: 32px; padding: 0 10px; font-size: 9px; }
 .reviewer-identity { margin: 0; color: #728286; font-size: 9px; line-height: 1.5; }
 
+.risk-intelligence-page { display: grid; gap: 14px; }
+.risk-intelligence-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 14px; align-items: start; }
+.risk-calibration-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.risk-calibration-metrics > span { display: flex; min-width: 0; flex-direction: column; gap: 6px; padding: 11px; border: 1px solid #e8efed; border-radius: 8px; background: #fbfdfc; }
+.risk-calibration-metrics small { color: #839193; font-size: 8px; line-height: 1.4; }.risk-calibration-metrics strong { color: #3b565a; font: 700 16px 'Avenir Next', Inter, 'Segoe UI', sans-serif; }
+.risk-data-note { margin: 12px 0 0; padding: 10px 12px; border-left: 2px solid #d1a355; background: #fcf8ee; color: #786c52; font-size: 9px; line-height: 1.55; }
+.risk-report-note { margin: 11px 0 0; color: #879395; font-size: 8px; line-height: 1.5; }
+.risk-band-table-wrap { overflow-x: auto; margin-top: 12px; }
+.risk-band-table { width: 100%; border-collapse: collapse; color: #687a7d; font-size: 9px; text-align: left; }
+.risk-band-table th { padding: 8px 6px; border-bottom: 1px solid #e7eeec; color: #8a9799; font-size: 8px; font-weight: 600; }
+.risk-band-table td { padding: 8px 6px; border-bottom: 1px solid #f0f3f2; white-space: nowrap; }
+.risk-alert-list, .risk-assessment-list { display: grid; gap: 7px; margin-top: 12px; }
+.risk-alert-row, .risk-assessment-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 11px; padding: 10px; border: 1px solid #e9efed; border-radius: 8px; background: #fbfdfc; }
+.risk-alert-row > div, .risk-assessment-row > div { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.risk-alert-row strong, .risk-assessment-row strong { overflow: hidden; color: #43595d; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.risk-alert-row small, .risk-assessment-row small { color: #879395; font-size: 8px; }
+.risk-alert-score { color: #a94e49; font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+.risk-alert-score small { color: #94a0a1; font: 8px Inter, 'Segoe UI', sans-serif; }
+.risk-empty { margin-top: 12px; padding: 16px 11px; border: 1px dashed #dce6e3; border-radius: 8px; color: #859294; text-align: center; font-size: 9px; }
+.risk-outcome-form { display: grid; gap: 12px; margin-top: 14px; }
+.risk-evidence-field { grid-column: 1 / -1; }
+.risk-correction-note { margin: -3px 0 0; color: #8a7041; font-size: 8px; line-height: 1.5; }
+.risk-review-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 9px; padding-top: 10px; border-top: 1px solid #edf1f0; }
+.risk-review-actions small { color: #879395; font-size: 8px; }
+
+@media (max-width: 1000px) {
+  .risk-intelligence-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 540px) {
+  .risk-calibration-metrics { grid-template-columns: 1fr; }
+  .risk-alert-row, .risk-assessment-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .risk-alert-score { grid-column: 2; }
+  .risk-alert-row > .status-badge, .risk-assessment-row > .status-badge { display: none; }
+  .risk-band-table th, .risk-band-table td { padding-right: 4px; padding-left: 4px; font-size: 8px; }
+}
+
 @media (max-width: 540px) {
   .auth-screen { padding: 16px; }
   .auth-card { padding: 23px; }

@@ -38,6 +38,8 @@ ARES includes a global GDACS recent-disaster feed connector. The public feed is 
 
 From `backend/`, run one sync with `python manage.py sync_gdacs_alerts`, or keep polling with `python manage.py sync_gdacs_alerts --watch`. Configure `ARES_GDACS_POLL_INTERVAL_SECONDS` (minimum 360) and `ARES_GDACS_MIN_ALERT_LEVEL` in the backend environment. The authenticated `GET /api/feeds/status/` endpoint reports the last attempt, last success, freshness, counts, errors, and current source events.
 
+GDACS HTTPS certificate checks remain enabled and use the operating system trust store plus the `certifi` CA bundle. If an HTTPS-inspecting proxy requires a private root CA, set `ARES_GDACS_CA_BUNDLE` to the local PEM bundle path; never disable certificate verification.
+
 ## API
 
 - `GET /api/imports/templates/` describes headers and limits.

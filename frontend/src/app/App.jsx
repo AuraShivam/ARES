@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NAV_GROUPS, SECTIONS, TABLE_COLUMNS } from '../config/navigation.js'
-import { clearAccessToken, request, setAccessToken, setUnauthorizedHandler } from '../lib/api.js'
+import { clearAccessToken, eventsWebSocketUrl, getAccessToken, request, setAccessToken, setUnauthorizedHandler } from '../lib/api.js'
 import { formatRelativeTime, rowsFrom } from '../lib/format.js'
+import { startVisibleDashboardPolling } from '../lib/dashboard-polling.js'
 import { OverviewPage, LoadingState } from '../features/overview/OverviewPage.jsx'
 import DataTable from '../features/records/DataTable.jsx'
 import { AssessmentModal, DisruptionForm, MovementForm, PurchaseOrderForm } from '../features/actions/Dialogs.jsx'
@@ -9,6 +10,7 @@ import ImportDialog from '../features/imports/ImportDialog.jsx'
 import ResponsePlanDialog from '../features/response-plans/ResponsePlanDialog.jsx'
 import LoginScreen from '../features/auth/LoginScreen.jsx'
 import ExternalFeedStatus from '../features/imports/ExternalFeedStatus.jsx'
+import RiskIntelligencePage from '../features/risk/RiskIntelligencePage.jsx'
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 30_000
 
@@ -21,6 +23,7 @@ function App() {
   const [overview, setOverview] = useState(null)
   const [apiHealth, setApiHealth] = useState(null)
   const [feedStatus, setFeedStatus] = useState(null)
+  const [riskData, setRiskData] = useState({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null })
   const [records, setRecords] = useState([])
   const [homeData, setHomeData] = useState({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
   const [loading, setLoading] = useState(true)
@@ -35,6 +38,7 @@ function App() {
   const [sort, setSort] = useState({ key: '', direction: 'asc' })
   const [lastUpdated, setLastUpdated] = useState(null)
   const [refreshState, setRefreshState] = useState('connecting')
+  const [liveUpdates, setLiveUpdates] = useState('connecting')
   const [clockNow, setClockNow] = useState(Date.now())
 
   useEffect(() => {
@@ -45,6 +49,7 @@ function App() {
       setApiHealth(null)
       setRecords([])
       setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
+      setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null })
       setLastUpdated(null)
       setRefreshState('connecting')
       setModal('')
@@ -86,6 +91,25 @@ function App() {
           request('/risk/alerts/?status=active', { signal }),
         ])
         setHomeData({ disruptions: rowsFrom(disruptions), shipments: rowsFrom(shipments), inventory: rowsFrom(inventory), riskAlerts: rowsFrom(riskAlerts) })
+      } else if (section === 'risk-intelligence') {
+        const [assessments, alerts, disruptions, policy, calibration, outcomes] = await Promise.all([
+          request('/risk/assessments/', { signal }),
+          request('/risk/alerts/', { signal }),
+          request('/disruptions/', { signal }),
+          request('/risk/policy/', { signal }),
+          request('/risk/calibration/', { signal }),
+          auth?.is_approver ? request('/risk/outcomes/', { signal }) : Promise.resolve([]),
+        ])
+        setRiskData({
+          assessments: rowsFrom(assessments),
+          alerts: rowsFrom(alerts),
+          disruptions: rowsFrom(disruptions),
+          outcomes: rowsFrom(outcomes),
+          policy,
+          calibration,
+        })
+        setRecords([])
+        setFeedStatus(null)
       } else {
         const data = await request(`/${section}/`, { signal })
         setRecords(rowsFrom(data))
@@ -108,7 +132,7 @@ function App() {
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
-  }, [section])
+  }, [section, auth?.is_approver])
 
   useEffect(() => {
     if (!auth || authInitializing) return undefined
@@ -119,34 +143,73 @@ function App() {
 
   useEffect(() => {
     if (!auth || authInitializing) return undefined
-    let timer
-    let stopped = false
-    let pollController
+    return startVisibleDashboardPolling(
+      (signal) => refresh(signal, true),
+      { intervalMs: DASHBOARD_REFRESH_INTERVAL_MS },
+    )
+  }, [refresh, auth, authInitializing])
 
-    async function poll() {
-      if (stopped) return
-      if (document.visibilityState === 'visible') {
-        pollController = new AbortController()
-        await refresh(pollController.signal, true)
-      }
-      if (!stopped && document.visibilityState === 'visible') {
-        timer = window.setTimeout(poll, DASHBOARD_REFRESH_INTERVAL_MS)
-      }
+  useEffect(() => {
+    if (!auth || authInitializing) return undefined
+
+    let disposed = false
+    let socket = null
+    let reconnectTimer = null
+    let refreshTimer = null
+    let reconnectAttempt = 0
+
+    function scheduleReconnect(code) {
+      if (disposed) return
+      setLiveUpdates(code === 4401 ? 'expired' : 'reconnecting')
+      if (code === 4401) return
+      const delay = Math.min(30_000, 1_000 * (2 ** Math.min(reconnectAttempt, 5)))
+      reconnectAttempt += 1
+      reconnectTimer = window.setTimeout(connect, delay)
     }
 
-    function onVisibilityChange() {
-      window.clearTimeout(timer)
-      pollController?.abort()
-      if (document.visibilityState === 'visible') poll()
+    function connect() {
+      if (disposed) return
+      setLiveUpdates('connecting')
+      try {
+        socket = new WebSocket(eventsWebSocketUrl())
+      } catch {
+        scheduleReconnect(0)
+        return
+      }
+
+      const currentSocket = socket
+      currentSocket.addEventListener('open', () => {
+        const token = getAccessToken()
+        if (!token) {
+          currentSocket.close(4401, 'Authentication required')
+          return
+        }
+        currentSocket.send(JSON.stringify({ type: 'authenticate', token }))
+      })
+      currentSocket.addEventListener('message', (message) => {
+        let event
+        try { event = JSON.parse(message.data) } catch { return }
+        if (event.type === 'ready') {
+          reconnectAttempt = 0
+          setLiveUpdates('connected')
+        } else if (event.type === 'data_changed') {
+          window.clearTimeout(refreshTimer)
+          refreshTimer = window.setTimeout(() => {
+            refreshTimer = null
+            if (!disposed && document.visibilityState === 'visible') refresh(undefined, true)
+          }, 500)
+        }
+      })
+      currentSocket.addEventListener('close', (event) => scheduleReconnect(event.code))
+      currentSocket.addEventListener('error', () => currentSocket.close())
     }
 
-    timer = window.setTimeout(poll, DASHBOARD_REFRESH_INTERVAL_MS)
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    connect()
     return () => {
-      stopped = true
-      window.clearTimeout(timer)
-      pollController?.abort()
-      document.removeEventListener('visibilitychange', onVisibilityChange)
+      disposed = true
+      window.clearTimeout(reconnectTimer)
+      window.clearTimeout(refreshTimer)
+      socket?.close(1000, 'Dashboard closed')
     }
   }, [refresh, auth, authInitializing])
 
@@ -194,6 +257,22 @@ function App() {
       setRefreshState('connected')
     } catch (requestError) {
       setError(requestError.message)
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  async function saveRiskOutcome(payload) {
+    setBusyId(payload.disruption_id)
+    setError('')
+    try {
+      await request('/risk/outcomes/', { method: 'POST', body: JSON.stringify(payload) })
+      setNotice('Verified outcome saved to the audit history.')
+      await refresh()
+      return true
+    } catch (requestError) {
+      setError(requestError.message)
+      return false
     } finally {
       setBusyId('')
     }
@@ -308,6 +387,7 @@ function App() {
     setApiHealth(null)
     setRecords([])
     setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
+    setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null })
     setLastUpdated(null)
     setRefreshState('connecting')
   }
@@ -435,9 +515,9 @@ function App() {
               <p className="page-description">{current.description}</p>
             </div>
             <div className="heading-actions">
-              <div className={`updated-chip ${refreshState === 'stale' ? 'is-stale' : ''}`} title={`Refreshes automatically every 30 seconds while this tab is visible. Last successful update: ${lastUpdatedLabel}.`}>
+              <div className={`updated-chip ${refreshState === 'stale' ? 'is-stale' : ''}`} title={`Dashboard changes arrive over an authenticated live connection when available, with a 30-second polling fallback. Last successful update: ${lastUpdatedLabel}.`}>
                 <span className="pulse-dot" />
-                <span>{refreshState === 'stale' ? 'Update delayed' : loading ? 'Refreshing' : 'Auto-refresh'}</span>
+                <span>{refreshState === 'stale' ? 'Update delayed' : loading ? 'Refreshing' : liveUpdates === 'connected' ? 'Live updates' : '30-sec refresh'}</span>
                 <small>{lastUpdated ? `· ${lastUpdatedLabel}` : '· waiting for data'}</small>
               </div>
               {action && <button className="primary-button" onClick={() => setModal(action.modal)}><span aria-hidden="true">{action.icon}</span>{action.label}</button>}
@@ -449,6 +529,8 @@ function App() {
 
           {section === 'overview'
             ? <OverviewPage data={overview} homeData={homeData} loading={loading} apiHealth={apiHealth} refreshState={refreshState} lastUpdatedLabel={lastUpdatedLabel} onNavigate={navigate} onAssess={assessRisk} busyId={busyId} />
+            : section === 'risk-intelligence'
+              ? <RiskIntelligencePage data={riskData} loading={loading} canReview={Boolean(auth.is_approver)} onSubmitOutcome={saveRiskOutcome} saving={Boolean(busyId)} />
             : <section className="panel records-panel">
               <div className="records-heading">
                 <div><h2>{current.title}</h2><p>{records.length} {records.length === 1 ? 'record' : 'records'} in the local dataset</p></div>

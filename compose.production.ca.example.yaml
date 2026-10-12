@@ -1,0 +1,18 @@
+# Optional overlay for managed PostgreSQL providers that require a private CA.
+# Copy this file to compose.production.ca.yaml and store the provider CA at
+# ./secrets/postgres-ca.crt before applying the overlay.
+services:
+  migrate:
+    secrets: [postgres-ca]
+  api:
+    secrets: [postgres-ca]
+  gdacs-worker:
+    secrets: [postgres-ca]
+  notification-worker:
+    secrets: [postgres-ca]
+  backup-worker:
+    secrets: [postgres-ca]
+
+secrets:
+  postgres-ca:
+    file: ./secrets/postgres-ca.crt

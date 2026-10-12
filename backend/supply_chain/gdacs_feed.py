@@ -5,6 +5,7 @@ import html
 import json
 import os
 import re
+import ssl
 import time
 import xml.etree.ElementTree as ET
 from datetime import timedelta, timezone as datetime_timezone
@@ -13,6 +14,7 @@ from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import certifi
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -75,6 +77,18 @@ def _user_agent():
     return os.getenv("ARES_GDACS_USER_AGENT", "ARES/1.0 (global-disaster-alert-ingestion)").strip() or "ARES/1.0 (global-disaster-alert-ingestion)"
 
 
+def _ssl_context():
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile=certifi.where())
+    extra_bundle = os.getenv("ARES_GDACS_CA_BUNDLE", "").strip()
+    if extra_bundle:
+        try:
+            context.load_verify_locations(cafile=extra_bundle)
+        except (OSError, ssl.SSLError) as exc:
+            raise FeedConfigurationError("ARES_GDACS_CA_BUNDLE must point to a readable PEM CA bundle.") from exc
+    return context
+
+
 def _retry_after_seconds(value):
     if not value:
         return None
@@ -99,10 +113,11 @@ def _fetch_feed_items():
         },
         method="GET",
     )
+    context = _ssl_context()
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:
-            with urlopen(request, timeout=20) as response:
+            with urlopen(request, timeout=20, context=context) as response:
                 content = response.read(MAX_RESPONSE_BYTES + 1)
             if len(content) > MAX_RESPONSE_BYTES:
                 raise ValueError("The GDACS response exceeded the 20 MB safety limit.")

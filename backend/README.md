@@ -36,6 +36,8 @@ python manage.py seed_demo
 python manage.py runserver
 ```
 
+The authenticated dashboard uses Redis-backed WebSocket invalidation events when available and retains 30-second polling as a fallback. `runserver` uses the in-memory channel layer when `DJANGO_DEBUG=true`; that layer is for a single local process. For multi-process runtime, set `ARES_REDIS_URL` to Redis and run Daphne/ASGI as shown in the Compose deployment guide.
+
 In a separate backend terminal, run the public disaster feed once with `python manage.py sync_gdacs_alerts`, or poll continuously with `python manage.py sync_gdacs_alerts --watch`. The connector uses no API credential. GDACS refreshes its standard feed about every six minutes; ARES enforces that minimum polling interval. Configure `ARES_GDACS_MIN_ALERT_LEVEL` as `green`, `orange`, or `red` (default `orange`) and `ARES_GDACS_POLL_INTERVAL_SECONDS` (default `360`) in the backend environment. The Data onboarding page shows the latest feed status; `GET /api/feeds/status/` returns the same status to authenticated users.
 
 Risk alerts default to score `60` with a `60` minute cooldown. Set `ARES_RISK_ALERT_SCORE_THRESHOLD` (0–100) and `ARES_RISK_ALERT_COOLDOWN_MINUTES` in the backend environment to change those values. Alerts are persisted and shown in the dashboard.
@@ -77,7 +79,7 @@ For a trusted local demo, `.env.example` sets `DJANGO_DEBUG=true` and Django use
 - `POST /api/risk/assess/` with `{ "disruption_id": "<uuid>" }` or `{ "title": "...", "severity": "high", "description": "...", "affected_region": "..." }`. The response includes a point breakdown, linked evidence coverage, data gaps, and an advisory recommendation.
 - `GET /api/risk/assessments/` lists stored assessment snapshots; filter with `?disruption_id=<uuid>`.
 - `GET /api/risk/alerts/?status=active` lists current threshold alerts. `GET /api/risk/policy/` returns the effective alert threshold, cooldown, and risk bands.
-- `POST /api/risk/outcomes/` records or corrects a verified incident outcome. Staff and `ares_approvers` can submit `{ "disruption_id": "<uuid>", "outcome": "impact", "evidence_notes": "..." }`; use `no_impact` for a verified incident with no material supply-chain impact.
+- `GET /api/risk/outcomes/` lists reviewed labels for staff and `ares_approvers`; `POST /api/risk/outcomes/` records or corrects a verified incident outcome. Submit `{ "disruption_id": "<uuid>", "outcome": "impact", "evidence_notes": "..." }`; use `no_impact` for a verified incident with no material supply-chain impact. The dashboard's Risk intelligence page provides the reviewer workflow and calibration report.
 - `GET /api/risk/calibration/` and `python manage.py calibrate_risk` summarize observed outcomes by risk band and precision/recall at the alert threshold. This is descriptive, uses only reviewer-entered labels, and does not tune or train the scoring rules.
 - `GET /api/health/`
 - `GET /api/feeds/status/` returns the GDACS source's last attempt, last success, recent event count, and sync errors.

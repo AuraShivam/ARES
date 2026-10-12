@@ -6,6 +6,7 @@
 - Login accepts a Django username and password and returns a token. The React dashboard sends it as `Authorization: Token <token>` and keeps it in the current tab's session storage.
 - A new login rotates the account's existing token. Tokens expire after eight hours by default (`ARES_API_TOKEN_TTL_HOURS`) and `/api/auth/logout/` revokes the active token.
 - Login attempts are rate limited to 10 per hour per client address.
+- `/ws/events/` validates the browser Origin against `DJANGO_ALLOWED_HOSTS`. The client authenticates in its first WebSocket message with the same expiring API token; unauthenticated sockets close after five seconds. Event messages include only a model/resource name and change action, never record content.
 - There is no public account registration. Bootstrap an administrator with `python manage.py createsuperuser`; add normal accounts in Django Admin.
 - Only staff/superuser accounts or members of the Django group named `ares_approvers` can approve or reject response plans. A decision stores the signed-in identity and audit actor.
 
@@ -27,7 +28,7 @@ The dashboard converts nested field errors into readable messages. Unexpected se
 
 `.env.example` is configured for a local development run. Before deployment, set `DJANGO_DEBUG=false`, a strong unique `DJANGO_SECRET_KEY`, exact `DJANGO_ALLOWED_HOSTS`, and exact `CORS_ALLOWED_ORIGINS`. Serve over HTTPS. Set `DJANGO_SECURE_SSL_REDIRECT=true` and a positive `DJANGO_SECURE_HSTS_SECONDS` only once the HTTPS endpoint and proxy behavior are verified. Keep credentials and secret keys in deployment secret storage; never commit `.env`.
 
-Token authentication is an MVP mechanism. A public deployment should review token storage, TLS termination, rate limits, user lifecycle, backups, monitoring, and incident response before launch.
+Token authentication is an MVP mechanism. Production WebSockets require a private TLS-enabled Redis service (`ARES_REDIS_URL`) shared by the ASGI API and workers; debug mode without Redis uses an in-memory layer for a single local process only. A public deployment should review token storage, TLS termination, rate limits, user lifecycle, backups, monitoring, and incident response before launch.
 
 ## Automated backend coverage
 

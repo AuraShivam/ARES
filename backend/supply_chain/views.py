@@ -390,16 +390,23 @@ def risk_assess(request):
     return Response({**result, "assessment_id": str(snapshot.pk), "assessed_at": snapshot.created_at})
 
 
-@api_view(["POST"])
+@api_view(["GET", "POST"])
 @permission_classes([IsSupplyChainApprover])
 def risk_outcome_upsert(request):
+    if request.method == "GET":
+        outcomes = RiskOutcome.objects.select_related("disruption").all()
+        return Response(RiskOutcomeSerializer(outcomes, many=True).data)
+
     serializer = RiskOutcomeUpsertSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     values = serializer.validated_data
     disruption = get_object_or_404(Disruption, pk=values["disruption_id"])
     reviewer = _reviewer_identity(request.user)
     existing = RiskOutcome.objects.filter(disruption=disruption).first()
-    before = RiskOutcomeSerializer(existing).data if existing else None
+    before = (
+        json.loads(json.dumps(RiskOutcomeSerializer(existing).data, cls=DjangoJSONEncoder))
+        if existing else None
+    )
     outcome, created = RiskOutcome.objects.update_or_create(
         disruption=disruption,
         defaults={
@@ -409,12 +416,13 @@ def risk_outcome_upsert(request):
             "reviewed_at": timezone.now(),
         },
     )
+    after = json.loads(json.dumps(RiskOutcomeSerializer(outcome).data, cls=DjangoJSONEncoder))
     AuditEvent.objects.create(
         entity_type="supply_chain.riskoutcome",
         entity_id=str(outcome.pk),
         action="create" if created else "update",
         actor=reviewer,
-        changes={"before": before, "after": RiskOutcomeSerializer(outcome).data},
+        changes={"before": before, "after": after},
     )
     return Response(RiskOutcomeSerializer(outcome).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 

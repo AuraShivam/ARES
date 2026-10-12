@@ -139,6 +139,12 @@ class OperationalWorkflowTests(APITestCase):
         self.assertEqual(approved.data["reviewed_by"], "operator")
         self.assertEqual(self.client.post(f"/api/response-plans/{plan_id}/start/", {}, format="json").status_code, status.HTTP_200_OK)
 
+        started_action = self.client.patch(
+            f"/api/response-actions/{action_id}/",
+            {"status": "in_progress"},
+            format="json",
+        )
+        self.assertEqual(started_action.status_code, status.HTTP_200_OK)
         action_update = self.client.patch(
             f"/api/response-actions/{action_id}/",
             {"status": "completed", "outcome": "Capacity secured"},

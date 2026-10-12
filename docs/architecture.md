@@ -7,13 +7,17 @@ ARES is a standalone supply-chain application with a Django REST API, PostgreSQL
 ```text
 Browser
   └── React + Vite dashboard (frontend/)
-       └── HTTP /api requests
-            └── Django REST API (backend/)
-                 ├── supply_chain domain models and API
-                 ├── explainable risk rules
-                 ├── disruption response plans and audit trail
-                 ├── scheduled GDACS feed poller
-                 └── PostgreSQL
+       ├── HTTP /api requests ──> Django REST API (ASGI / Daphne)
+       └── authenticated WebSocket <── Redis event groups
+                                      ↑
+                 ┌────────────────────┴─────────────────┐
+                 │ Django API and background workers    │
+                 ├── supply_chain models and REST API   │
+                 ├── explainable risk rules             │
+                 ├── disruption plans and audit trail   │
+                 └── GDACS and notification workers     │
+                           │                 │
+                       PostgreSQL          Redis
 ```
 
 ## Repository responsibilities
@@ -43,7 +47,7 @@ Browser
 
 ## Dashboard refresh behavior
 
-The authenticated dashboard refreshes the overview and active page every 30 seconds while its browser tab is visible. It pauses background polling when the tab is hidden and fetches fresh data when the user returns. A relative timestamp reports the last successful refresh, and failed refreshes switch the connection indicator to a stale-data state while keeping the last displayed records available. A user can also request an immediate refresh. This provides near-real-time updates; it is not server push. If a deployment needs lower latency, Phase 8 should add authenticated streaming with an ASGI-capable host and an event delivery mechanism appropriate to the deployment's number of instances.
+The authenticated dashboard opens a same-origin WebSocket at `/ws/events/` and authenticates with its expiring API token in the first message, not in the URL. Django broadcasts only a resource name and create/update/delete action after the database transaction commits. The browser uses that signal to reload current page data through the authenticated API; the socket never sends record contents. Redis shares event groups among Daphne and background workers. The browser reconnects with backoff and retains 30-second visible-tab polling as a fallback. A relative timestamp reports the last successful refresh; API failures mark displayed data stale.
 
 ## Data sources and database
 
@@ -70,5 +74,5 @@ See [backend/README.md](../backend/README.md) for setup and endpoint details.
 - Seeded and user-entered records are not verified against external supply-chain systems.
 - GDACS alerts indicate natural-disaster events; they do not prove that a specific supplier, shipment, or facility is affected.
 - Risk scores use transparent rules; no trained or hosted AI model is currently connected.
-- API authentication and response-plan approval permissions are implemented for the MVP. HTTPS deployment, production secret management, UI test coverage, and deployment safeguards remain before wider exposure; see [security and quality](security-quality.md).
+- API and WebSocket authentication plus response-plan approval permissions are implemented for the MVP. HTTPS deployment, production secret management, WebSocket regression coverage, and deployment safeguards remain before wider exposure; see [security and quality](security-quality.md).
 - Recommendations are advisory; ARES does not autonomously execute procurement or logistics actions.

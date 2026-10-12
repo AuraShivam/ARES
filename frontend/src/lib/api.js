@@ -8,6 +8,19 @@ export function setAccessToken(token) {
   accessToken = token || ''
 }
 
+export function getAccessToken() {
+  return accessToken
+}
+
+export function eventsWebSocketUrl() {
+  const url = new URL(API, window.location.href)
+  url.pathname = url.pathname.replace(/\/api\/?$/, '/ws/events/') || '/ws/events/'
+  url.search = ''
+  url.hash = ''
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  return url.toString()
+}
+
 export function clearAccessToken() {
   accessToken = ''
 }

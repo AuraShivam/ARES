@@ -3,6 +3,7 @@ const NAV_GROUPS = [
     title: 'Monitor',
     items: [
       ['overview', 'Overview', '◫'],
+      ['risk-intelligence', 'Risk intelligence', '⌁'],
       ['disruptions', 'Disruptions', '⌁'],
       ['response-plans', 'Response plans', '✓'],
       ['notifications', 'Notifications', '✉'],
@@ -37,6 +38,7 @@ const NAV_GROUPS = [
 
 const SECTIONS = {
   overview: { title: 'Network overview', description: 'A supply-chain view refreshed automatically every 30 seconds.' },
+  'risk-intelligence': { title: 'Risk intelligence', description: 'Review explainable assessments, threshold alerts, and evidence-backed outcomes.' },
   disruptions: { title: 'Disruptions', description: 'Review events, assess exposure, and record a response.' },
   'response-plans': { title: 'Response plans', description: 'Assign, review, approve, and track disruption response work.' },
   notifications: { title: 'Notifications', description: 'Inspect queued and delivered risk and response-plan email.' },

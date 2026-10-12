@@ -7,7 +7,8 @@ export function describeApiError(value) {
     return Object.entries(value).map(([key, detail]) => {
       const message = describeApiError(detail)
       if (!message) return ''
-      return key === 'detail' || key === 'non_field_errors' ? message : `${humanize(key)}: ${message}`
+      const label = humanize(key).replace(/^./, (character) => character.toUpperCase())
+      return key === 'detail' || key === 'non_field_errors' ? message : `${label}: ${message}`
     }).filter(Boolean).join(' · ')
   }
   return value == null ? '' : String(value)

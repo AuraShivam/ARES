@@ -1,0 +1,121 @@
+name: ares
+
+x-backend-image: &backend-image
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+    args:
+      PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.13.15-slim-bookworm}
+  image: ares-backend:${ARES_IMAGE_TAG:-local}
+  env_file:
+    - .env.production
+  init: true
+
+services:
+  migrate:
+    <<: *backend-image
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    restart: "no"
+    networks: [app]
+
+  api:
+    <<: *backend-image
+    command: ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose: ["8000"]
+    restart: unless-stopped
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    stop_grace_period: 30s
+
+  gdacs-worker:
+    <<: *backend-image
+    command: ["python", "manage.py", "sync_gdacs_alerts", "--watch"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks: [app]
+    stop_grace_period: 30s
+
+  notification-worker:
+    <<: *backend-image
+    profiles: [notifications]
+    command: ["python", "manage.py", "run_notification_worker", "--interval-seconds", "15", "--limit", "100"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks: [app]
+    stop_grace_period: 30s
+
+  backup-worker:
+    image: ${POSTGRES_CLIENT_IMAGE:-postgres:17-alpine}
+    environment:
+      PGDATABASE: ${POSTGRES_DB:?Set POSTGRES_DB in .env.production}
+      PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER in .env.production}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+      PGHOST: ${POSTGRES_HOST:?Set POSTGRES_HOST in .env.production}
+      PGPORT: ${POSTGRES_PORT:-5432}
+      PGSSLMODE: ${POSTGRES_SSLMODE:-verify-full}
+      PGSSLROOTCERT: ${POSTGRES_SSLROOTCERT:-}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    command: ["/bin/sh", "-c", "while :; do /usr/local/bin/backup_postgres.sh || true; sleep \"$$BACKUP_INTERVAL_SECONDS\"; done"]
+    volumes:
+      - ./ops/backup_postgres.sh:/usr/local/bin/backup_postgres.sh:ro
+      - ./ops/restore_postgres.sh:/usr/local/bin/restore_postgres.sh:ro
+      - ares_backups:/backups
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks: [app]
+    healthcheck:
+      test: ["CMD-SHELL", "test -n \"$$(find /backups -maxdepth 1 -type f -name 'ares-*.dump' -mmin -1500 -print -quit)\""]
+      interval: 5m
+      timeout: 5s
+      retries: 2
+      start_period: 10m
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22.23-alpine3.24}
+        CADDY_IMAGE: ${CADDY_IMAGE:-caddy:2.11.7-alpine}
+        VITE_API_BASE_URL: /api
+    image: ares-web:${ARES_IMAGE_TAG:-local}
+    environment:
+      ARES_DOMAIN: ${ARES_DOMAIN:?Set ARES_DOMAIN in .env.production}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    networks: [edge, app]
+    stop_grace_period: 30s
+
+volumes:
+  ares_backups:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge:
+  app:

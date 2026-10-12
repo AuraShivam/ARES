@@ -20,9 +20,10 @@ ARES accepts data through its authenticated APIs, dashboard forms, and validated
 │       ├── config/           # Navigation and record column definitions
 │       ├── features/         # Overview, record tables, and action dialogs
 │       └── lib/              # API client and shared display helpers
-└── docs/
-    ├── architecture.md      # Runtime layout and data flow
-    └── roadmap.md           # Phases, status, and remaining work
+├── docs/                     # Architecture, operations, API, and roadmap guides
+├── ops/                      # PostgreSQL backup and guarded restore scripts
+├── compose.demo.yaml         # Loopback-only local demonstration runtime
+└── compose.production.yaml   # Provider-neutral production runtime
 ```
 
-Start with the [architecture guide](docs/architecture.md), [roadmap](docs/roadmap.md), [security and quality guide](docs/security-quality.md), [risk intelligence guide](docs/risk-intelligence.md), [response-plan guide](docs/response-plans.md), and [backend setup/API guide](backend/README.md).
+For a local demo, follow the [deployment and operations guide](docs/deployment.md). Start with the [architecture guide](docs/architecture.md), [roadmap](docs/roadmap.md), [security and quality guide](docs/security-quality.md), [risk intelligence guide](docs/risk-intelligence.md), [response-plan guide](docs/response-plans.md), and [backend setup/API guide](backend/README.md).

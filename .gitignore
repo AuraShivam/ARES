@@ -12,9 +12,15 @@ __pycache__/
 
 # Local configuration and logs
 .env
+.env.production
+.env.demo
+secrets/
+compose.production.ca.yaml
 *.log
 .DS_Store
 .pnpm-store/
+backups/
+*.dump
 
 # Supplied reference PDFs stay in the workspace but out of source history.
 /*.pdf
