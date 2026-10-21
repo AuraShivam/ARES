@@ -10,7 +10,7 @@ from supply_chain.views import (
     ResponseActionViewSet,
     ResponsePlanViewSet, RiskAlertViewSet, RiskAssessmentViewSet, ShipmentViewSet,
     SupplierViewSet, WarehouseViewSet, health, overview, risk_assess,
-    predictive_risk, risk_calibration, risk_outcome_upsert, risk_policy,
+    predictive_risk, inventory_forecast, risk_calibration, risk_outcome_upsert, risk_policy,
 )
 
 router = DefaultRouter()
@@ -35,6 +35,7 @@ urlpatterns = [
     path("api/auth/login/", login, name="api-login"),
     path("api/auth/me/", current_user, name="api-current-user"),
     path("api/auth/logout/", logout, name="api-logout"),
+    path("api/inventory/forecast/", inventory_forecast, name="inventory-forecast"),
     path("api/", include(router.urls)),
     path("api/imports/templates/", import_templates, name="import-templates"),
     path("api/feeds/status/", feed_status, name="feed-status"),

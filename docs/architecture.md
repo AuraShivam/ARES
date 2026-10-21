@@ -13,7 +13,7 @@ Browser
                  ┌────────────────────┴─────────────────┐
                  │ Django API and background workers    │
                  ├── supply_chain models and REST API   │
-                 ├── explainable risk rules             │
+                 ├── explainable risk rules and ML forecasts │
                  ├── disruption plans and audit trail   │
                  └── GDACS and notification workers     │
                            │                 │
@@ -30,6 +30,7 @@ Browser
 | `backend/supply_chain/serializers.py` | API input validation and JSON representation |
 | `backend/supply_chain/views.py` | REST endpoints, overview, health, and risk assessment handlers |
 | `backend/supply_chain/risk.py` | Explainable deterministic scoring and advisory recommendations |
+| `backend/supply_chain/demand_forecast.py` | Experimental per-material demand forecasts and advisory stock planning |
 | `backend/supply_chain/migrations/` | Versioned database schema changes |
 | `frontend/src/app/` | Dashboard shell, screen state, API orchestration, and user actions |
 | `frontend/src/config/` | Navigation and table field configuration |
@@ -41,7 +42,7 @@ Browser
 
 1. Django routes API requests from `backend/config/urls.py` to handlers in `backend/supply_chain/views.py`.
 2. Serializers validate request data and represent model relationships.
-3. Django ORM reads and updates PostgreSQL. Inventory movements update a balance and write the movement record in one transaction.
+3. Django ORM reads and updates PostgreSQL. Live inventory movements update a balance and write the movement record in one transaction; imported historical movements preserve their business event date without changing today's balance.
 4. Risk assessment combines disruption severity and reported confidence with linked supplier, shipment, open purchase-order, material, inventory, region, and source-freshness evidence. It returns a capped score, point breakdown, coverage summary, data gaps, and advisory recommendation.
 5. The React dashboard calls `/api/` and renders overview metrics, tables, and forms.
 
@@ -73,6 +74,6 @@ See [backend/README.md](../backend/README.md) for setup and endpoint details.
 
 - Seeded and user-entered records are not verified against external supply-chain systems.
 - GDACS alerts indicate natural-disaster events; they do not prove that a specific supplier, shipment, or facility is affected.
-- Risk scores use transparent rules; no trained or hosted AI model is currently connected.
+- Disruption scores use transparent rules. Experimental shipment-delay and material-demand models train from verified outcomes and dated movements respectively; forecasts are withheld when there is insufficient history and have not been calibrated as probabilities.
 - API and WebSocket authentication plus response-plan approval permissions are implemented for the MVP. HTTPS deployment, production secret management, WebSocket regression coverage, and deployment safeguards remain before wider exposure; see [security and quality](security-quality.md).
 - Recommendations are advisory; ARES does not autonomously execute procurement or logistics actions.

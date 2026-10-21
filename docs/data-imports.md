@@ -4,7 +4,7 @@ The dashboard's **CSV imports** section previews and validates an upload before 
 
 ## Supported records
 
-Import in dependency order. Materials may refer to suppliers, inventory refers to materials and warehouses, purchase orders refer to suppliers and materials, and shipments refer to purchase orders. Disruptions can optionally reference a supplier or shipment.
+Import in dependency order. Materials may refer to suppliers, inventory refers to materials and warehouses, purchase orders refer to suppliers and materials, dated movements refer to existing inventory (and optionally purchase orders), and shipments refer to purchase orders. Disruptions can optionally reference a supplier or shipment.
 
 | Type | Required columns | Optional columns | Match key |
 | --- | --- | --- | --- |
@@ -12,13 +12,14 @@ Import in dependency order. Materials may refer to suppliers, inventory refers t
 | Materials | `sku`, `name` | `category`, `unit`, `criticality`, `preferred_supplier_code`, `source_key`, `source_updated_at` | `sku` |
 | Warehouses | `code`, `name` | `region`, `country`, `warehouse_type`, `active`, `source_key`, `source_updated_at` | `code` |
 | Inventory balances | `material_sku`, `warehouse_code`, `quantity` | `reorder_point`, `unit_cost`, `source_key`, `source_updated_at` | `material_sku` + `warehouse_code` |
+| Dated inventory movements | `source_key`, `material_sku`, `warehouse_code`, `movement_type`, `quantity_delta`, `occurred_at` | `purchase_order_number`, `reference`, `notes` | `source_name` + `source_key` |
 | Purchase orders | `number`, `supplier_code`, `material_sku`, `quantity` | `ordered_at`, `expected_date`, `status`, `currency`, `unit_price`, `source_key`, `source_updated_at` | `number` |
 | Shipments | `reference`, `purchase_order_number`, `origin`, `destination` | `carrier`, `eta`, `actual_delivery_date`, `status`, `risk_score`, `source_key`, `source_updated_at` | `reference` |
 | Disruptions | `source_key`, `title`, `severity` | `disruption_type`, `description`, `affected_region`, `status`, `confidence`, `affected_supplier_code`, `shipment_reference`, `source_updated_at` | `source_name` + `source_key` |
 
 Templates can be downloaded from the import dialog. Files must be UTF-8 CSV, at most 5 MB, and contain no more than 2,000 nonblank data rows. Header matching ignores case and normalizes spaces/punctuation to underscores; unsupported, duplicate, or missing required headers are rejected.
 
-Dates use `YYYY-MM-DD`. `source_updated_at` must be a timezone-aware ISO 8601 timestamp. Decimal values use a period as the decimal separator. `active` accepts `true`/`false`, `yes`/`no`, or `1`/`0`. Domain choices such as supplier status, material criticality, purchase-order status, shipment status, and disruption severity are validated against the model. Disruption imports require a stable source key so repeated imports can safely find the same event.
+Dates use `YYYY-MM-DD`. `source_updated_at` must be a timezone-aware ISO 8601 timestamp. Decimal values use a period as the decimal separator. `active` accepts `true`/`false`, `yes`/`no`, or `1`/`0`. Domain choices such as supplier status, material criticality, purchase-order status, shipment status, and disruption severity are validated against the model. Disruption and movement imports require a stable source key so repeated imports can safely find the same event.
 
 ## Duplicate and update behavior
 
@@ -30,6 +31,7 @@ Dates use `YYYY-MM-DD`. `source_updated_at` must be a timezone-aware ISO 8601 ti
 - The commit step rechecks current database state and writes all accepted rows in one transaction. A changed/conflicting preview must be uploaded and reviewed again.
 - On an update, blank optional cells preserve existing values; omitted columns also preserve values. On a new record, blank optional cells use the model's default or empty value. `source_name` records the latest import source, and `source_key` defaults to the natural key when no source key is provided.
 - Updating an existing inventory balance creates an inventory adjustment movement when the quantity changes. The initial balance created for a new inventory record does not create a movement.
+- Historical movement imports preserve `occurred_at` as the event date and do not change the current inventory balance. Use negative `quantity_delta` for `issue` consumption and positive `quantity_delta` for `receipt`; only issue movements train demand forecasts. Each row must reference an existing material/warehouse balance and have a stable source key. Link a receipt to `purchase_order_number` when possible; ARES uses at least three linked receipt orders to estimate observed lead time for a material's preferred supplier. `balance_after` is left blank for imported history because ARES does not reconstruct historical balances from imported events.
 - Shipment rows resolve their purchase-order number to an existing order. Disruption rows match on the selected source name and source key; optional supplier/shipment references must already exist.
 - `ordered_at` and `actual_delivery_date` are needed to reconstruct historical delay examples. An imported actual date is unverified and is excluded from model training until an ARES approver reviews it in **Risk intelligence**.
 

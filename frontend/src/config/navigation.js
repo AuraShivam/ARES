@@ -14,6 +14,7 @@ const NAV_GROUPS = [
     items: [
       ['purchase-orders', 'Purchase orders', '▤'],
       ['inventory', 'Inventory', '▦'],
+      ['demand-planning', 'Demand planning', '⌁'],
       ['warehouses', 'Warehouses', '⌂'],
       ['suppliers', 'Suppliers', '♧'],
       ['materials', 'Materials', '◇'],
@@ -44,6 +45,7 @@ const SECTIONS = {
   shipments: { title: 'Shipments', description: 'Track shipment status, routes, and delivery risk.' },
   'purchase-orders': { title: 'Purchase orders', description: 'Review supplier commitments and multi-line order value.' },
   inventory: { title: 'Inventory', description: 'See on-hand stock, reorder thresholds, and warehouse balances.' },
+  'demand-planning': { title: 'Demand planning', description: 'Forecast material consumption, stockout timing, and replenishment needs from dated usage history.' },
   warehouses: { title: 'Warehouses', description: 'Manage the facilities connected to inventory balances.' },
   suppliers: { title: 'Suppliers', description: 'Review supplier coverage, lead times, and risk profiles.' },
   materials: { title: 'Materials', description: 'Explore material criticality and preferred sourcing.' },
@@ -100,7 +102,7 @@ const TABLE_COLUMNS = {
   ],
   'inventory-movements': [
     ['material_sku', 'SKU'], ['warehouse_name', 'Warehouse'], ['movement_type', 'Movement'],
-    ['quantity_delta', 'Change'], ['balance_after', 'Balance after'], ['reference', 'Reference'], ['actor', 'Actor'], ['created_at', 'Recorded'],
+    ['quantity_delta', 'Change'], ['occurred_at', 'Event date'], ['balance_after', 'Balance after'], ['reference', 'Reference'], ['actor', 'Actor'], ['created_at', 'Recorded'],
   ],
   'audit-events': [
     ['entity_type', 'Record type'], ['action', 'Action'], ['entity_id', 'Record ID'],

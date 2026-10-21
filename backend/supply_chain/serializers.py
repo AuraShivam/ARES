@@ -251,18 +251,33 @@ class InventoryMovementSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryMovement
         fields = "__all__"
-        read_only_fields = ("actor", "balance_after", "created_at", "updated_at")
+        read_only_fields = (
+            "actor", "balance_after", "source_name", "source_key", "source_updated_at",
+            "created_at", "updated_at",
+        )
 
     def validate(self, attrs):
         movement_type = attrs.get("movement_type", getattr(self.instance, "movement_type", None))
         delta = attrs.get("quantity_delta", getattr(self.instance, "quantity_delta", None))
+        occurred_at = attrs.get("occurred_at", getattr(self.instance, "occurred_at", None))
         if delta is not None and delta == 0:
             raise serializers.ValidationError({"quantity_delta": "Movement quantity must be non-zero."})
         if movement_type == "receipt" and delta is not None and delta < 0:
             raise serializers.ValidationError({"quantity_delta": "Receipts must increase inventory."})
         if movement_type == "issue" and delta is not None and delta > 0:
             raise serializers.ValidationError({"quantity_delta": "Issues must use a negative quantity delta."})
+        if occurred_at and occurred_at > timezone.localdate():
+            raise serializers.ValidationError({"occurred_at": "An inventory movement date cannot be in the future."})
         inventory = attrs.get("inventory", getattr(self.instance, "inventory", None))
+        purchase_order = attrs.get("purchase_order", getattr(self.instance, "purchase_order", None))
+        if purchase_order:
+            if movement_type != "receipt":
+                raise serializers.ValidationError({"purchase_order": "Only receipt movements can be linked to a purchase order."})
+            matches_material = purchase_order.material_id == inventory.material_id if inventory else False
+            if not matches_material and inventory:
+                matches_material = purchase_order.lines.filter(material_id=inventory.material_id).exists()
+            if not matches_material:
+                raise serializers.ValidationError({"purchase_order": "The purchase order does not include this movement's material."})
         if self.instance is None and inventory and delta is not None and inventory.quantity + delta < 0:
             raise serializers.ValidationError({"quantity_delta": "The movement would make on-hand inventory negative."})
         return attrs

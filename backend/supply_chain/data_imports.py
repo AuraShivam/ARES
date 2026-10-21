@@ -44,6 +44,12 @@ IMPORT_SCHEMAS = {
         "optional": ["reorder_point", "unit_cost", "source_key", "source_updated_at"],
         "key": "material_sku + warehouse_code",
     },
+    "inventory_movement": {
+        "label": "Dated inventory movements",
+        "required": ["source_key", "material_sku", "warehouse_code", "movement_type", "quantity_delta", "occurred_at"],
+        "optional": ["purchase_order_number", "reference", "notes"],
+        "key": "source_name + source_key",
+    },
     "purchase_order": {
         "label": "Purchase orders",
         "required": ["number", "supplier_code", "material_sku", "quantity"],
@@ -248,6 +254,7 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         "material": Material,
         "warehouse": Warehouse,
         "inventory": Inventory,
+        "inventory_movement": InventoryMovement,
         "purchase_order": PurchaseOrder,
         "shipment": Shipment,
         "disruption": Disruption,
@@ -296,6 +303,35 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         for field_name in ("quantity", "reorder_point", "unit_cost"):
             if getattr(candidate, field_name) is not None and getattr(candidate, field_name) < 0:
                 errors.append(f"{field_name} cannot be negative.")
+    elif entity_type == "inventory_movement":
+        material_sku = row.get("material_sku", "").strip()
+        warehouse_code = row.get("warehouse_code", "").strip()
+        inventory = Inventory.objects.filter(
+            material__sku__iexact=material_sku,
+            warehouse__code__iexact=warehouse_code,
+        ).select_related("material", "warehouse").first()
+        if inventory is None:
+            errors.append("material_sku + warehouse_code: no matching inventory balance. Import inventory first.")
+        else:
+            candidate.inventory = inventory
+        _set_value(candidate, row, "movement_type", "movement_type", errors, str.casefold, required=True)
+        _set_value(candidate, row, "quantity_delta", "quantity_delta", errors, _parse_decimal, required=True)
+        _set_value(candidate, row, "occurred_at", "occurred_at", errors, _parse_date, required=True)
+        if candidate.occurred_at and candidate.occurred_at > timezone.localdate():
+            errors.append("occurred_at cannot be in the future.")
+        if "purchase_order_number" in row:
+            _set_reference(candidate, row, "purchase_order_number", "purchase_order", PurchaseOrder, "number", errors)
+        if candidate.purchase_order_id:
+            if candidate.movement_type != "receipt":
+                errors.append("purchase_order_number can only be linked to a receipt movement.")
+            order_materials = {candidate.purchase_order.material_id}
+            order_materials.update(candidate.purchase_order.lines.values_list("material_id", flat=True))
+            if candidate.inventory_id and candidate.inventory.material_id not in order_materials:
+                errors.append("purchase_order_number does not include this movement's material.")
+        _set_value(candidate, row, "reference", "reference", errors)
+        _set_value(candidate, row, "notes", "notes", errors)
+        candidate.balance_after = None
+        candidate.actor = "csv-import"
     elif entity_type == "purchase_order":
         _set_value(candidate, row, "number", "number", errors, normalized_code, required=True)
         _set_reference(candidate, row, "supplier_code", "supplier", Supplier, "code", errors, required=True)
@@ -354,6 +390,8 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         candidate.source_key = natural_key[:160]
     if entity_type == "disruption" and not candidate.source_key:
         errors.append("source_key is required for repeatable disruption imports.")
+    if entity_type == "inventory_movement" and not candidate.source_key:
+        errors.append("source_key is required for repeatable movement imports.")
     candidate.source_name = source_name
     if "source_updated_at" in row and row["source_updated_at"]:
         try:
@@ -385,6 +423,8 @@ def _natural_key(entity_type, row):
         material = row.get("material_sku", "").strip().upper()
         warehouse = row.get("warehouse_code", "").strip().upper()
         return f"{material}|{warehouse}" if material and warehouse else ""
+    if entity_type == "inventory_movement":
+        return row.get("source_key", "").strip()
     if entity_type == "purchase_order":
         return row.get("number", "").strip().upper()
     if entity_type == "shipment":
@@ -403,6 +443,11 @@ def _existing_record(entity_type, row, source_name, lock=False):
         queryset = Inventory.objects.filter(
             material__sku__iexact=row.get("material_sku", "").strip(),
             warehouse__code__iexact=row.get("warehouse_code", "").strip(),
+        )
+    elif entity_type == "inventory_movement":
+        queryset = InventoryMovement.objects.filter(
+            source_name__iexact=source_name.strip(),
+            source_key__iexact=row.get("source_key", "").strip(),
         )
     elif entity_type == "purchase_order":
         queryset = PurchaseOrder.objects.filter(number__iexact=row.get("number", "").strip())
@@ -483,6 +528,9 @@ def create_preview(entity_type, source_name, duplicate_policy, upload):
 
 
 def _apply_candidate(entity_type, candidate, existing, batch):
+    if entity_type == "inventory_movement":
+        candidate.save()
+        return candidate
     if entity_type == "inventory":
         previous_quantity = existing.quantity if existing else None
         candidate.save()

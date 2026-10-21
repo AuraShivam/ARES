@@ -11,6 +11,7 @@ import ResponsePlanDialog from '../features/response-plans/ResponsePlanDialog.js
 import LoginScreen from '../features/auth/LoginScreen.jsx'
 import ExternalFeedStatus from '../features/imports/ExternalFeedStatus.jsx'
 import RiskIntelligencePage from '../features/risk/RiskIntelligencePage.jsx'
+import DemandPlanningPage from '../features/inventory/DemandPlanningPage.jsx'
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 30_000
 
@@ -25,6 +26,7 @@ function App() {
   const [apiHealth, setApiHealth] = useState(null)
   const [feedStatus, setFeedStatus] = useState(null)
   const [riskData, setRiskData] = useState({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
+  const [demandData, setDemandData] = useState(null)
   const [records, setRecords] = useState([])
   const [homeData, setHomeData] = useState({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
   const [loading, setLoading] = useState(true)
@@ -51,6 +53,7 @@ function App() {
       setRecords([])
       setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
       setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
+      setDemandData(null)
       setLastUpdated(null)
       setRefreshState('connecting')
       setModal('')
@@ -113,6 +116,10 @@ function App() {
           predictive,
           shipments: rowsFrom(shipments),
         })
+        setRecords([])
+        setFeedStatus(null)
+      } else if (section === 'demand-planning') {
+        setDemandData(await request('/inventory/forecast/', { signal }))
         setRecords([])
         setFeedStatus(null)
       } else {
@@ -414,6 +421,7 @@ function App() {
     setRecords([])
     setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
     setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
+    setDemandData(null)
     setLastUpdated(null)
     setRefreshState('connecting')
   }
@@ -581,6 +589,8 @@ function App() {
             ? <OverviewPage data={overview} homeData={homeData} loading={loading} apiHealth={apiHealth} refreshState={refreshState} lastUpdatedLabel={lastUpdatedLabel} onNavigate={navigate} onAssess={assessRisk} busyId={busyId} />
             : section === 'risk-intelligence'
               ? <RiskIntelligencePage data={riskData} loading={loading} canReview={Boolean(auth.is_approver)} onSubmitOutcome={saveRiskOutcome} onVerifyDelivery={verifyShipmentDelivery} savingId={busyId} />
+            : section === 'demand-planning'
+              ? <DemandPlanningPage data={demandData} loading={loading} />
             : <section className="panel records-panel">
               <div className="records-heading">
                 <div><h2>{current.title}</h2><p>{records.length} {records.length === 1 ? 'record' : 'records'} in the local dataset</p></div>

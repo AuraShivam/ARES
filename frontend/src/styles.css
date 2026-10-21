@@ -550,6 +550,24 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .reviewer-identity { margin: 0; color: #728286; font-size: 9px; line-height: 1.5; }
 
 .risk-intelligence-page { display: grid; gap: 14px; }
+.demand-planning-page { display: grid; gap: 14px; }
+.demand-panel { display: grid; gap: 14px; }
+.demand-heading { align-items: center; }
+.demand-horizon { display: grid; gap: 5px; min-width: 120px; color: #849193; font-size: 9px; }
+.demand-horizon select { min-height: 34px; padding: 0 10px; border: 1px solid #dce7e4; border-radius: 7px; background: #fff; color: #40585c; }
+.demand-material-list { display: grid; gap: 9px; }
+.demand-material-card { padding: 13px; border: 1px solid #e5edeb; border-radius: 9px; background: #fbfdfc; }
+.demand-material-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.demand-material-header > div { display: grid; min-width: 0; gap: 4px; }
+.demand-material-header strong { overflow: hidden; color: #344d51; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.demand-material-header small { color: #879395; font-size: 8px; }
+.demand-metrics-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 11px; }
+.demand-metrics-row > span { display: flex; min-width: 0; flex-direction: column; gap: 5px; padding: 9px; border-radius: 7px; background: #f2f7f5; }
+.demand-metrics-row small, .demand-metrics-row em { color: #879395; font-size: 8px; font-style: normal; line-height: 1.4; }
+.demand-metrics-row strong { color: #40585c; font-size: 10px; line-height: 1.35; }
+.demand-recommendation { margin: 10px 0 0; padding: 9px 10px; border-left: 2px solid #76b3a2; background: #f0f8f5; color: #536e68; font-size: 9px; line-height: 1.5; }
+.demand-recommendation.is-urgent { border-color: #c76c61; background: #fff4f2; color: #8c4b45; }
+.demand-idle-note { margin: 8px 0 0; color: #866d3c; font-size: 8px; line-height: 1.5; }
 .risk-intelligence-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 14px; align-items: start; }
 .risk-calibration-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
 .risk-calibration-metrics > span { display: flex; min-width: 0; flex-direction: column; gap: 6px; padding: 11px; border: 1px solid #e8efed; border-radius: 8px; background: #fbfdfc; }
@@ -597,11 +615,14 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 
 @media (max-width: 1000px) {
   .risk-intelligence-grid, .predictive-lower-grid { grid-template-columns: 1fr; }
+  .demand-metrics-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 540px) {
   .risk-calibration-metrics { grid-template-columns: 1fr; }
   .predictive-shipment-metrics { grid-template-columns: 1fr; }
   .predictive-shipment-heading { align-items: flex-start; }
+  .demand-heading { align-items: stretch; flex-direction: column; }
+  .demand-metrics-row { grid-template-columns: 1fr; }
   .risk-alert-row, .risk-assessment-row { grid-template-columns: minmax(0, 1fr) auto; }
   .risk-alert-score { grid-column: 2; }
   .risk-alert-row > .status-badge, .risk-assessment-row > .status-badge { display: none; }

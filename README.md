@@ -1,7 +1,7 @@
 
 Autonomous Resilient Enterprise Supply Chain is a standalone supply-chain visibility and disruption-response application. The current MVP uses Django REST Framework, PostgreSQL, and a React dashboard.
 
-ARES accepts data through its authenticated APIs, dashboard forms, and validated CSV imports for supply-chain records. A scheduled, credential-free GDACS connector brings global recent disaster alerts into the disruption workflow; additional supplier and carrier feeds remain future integrations.
+ARES accepts data through its authenticated APIs, dashboard forms, and validated CSV imports for supply-chain records. A scheduled, credential-free GDACS connector brings global recent disaster alerts into the disruption workflow; additional supplier and carrier feeds remain future integrations. Experimental demand forecasts use dated issue history and withhold predictions when there is not enough history.
 
 ## Repository map
 
@@ -25,4 +25,4 @@ ARES accepts data through its authenticated APIs, dashboard forms, and validated
 └── compose.production.yaml   # Provider-neutral production runtime
 ```
 
-For a local demo, follow the [deployment and operations guide](docs/deployment.md). Start with the [architecture guide](docs/architecture.md), [roadmap](docs/roadmap.md), [security and quality guide](docs/security-quality.md), [risk intelligence guide](docs/risk-intelligence.md), [response-plan guide](docs/response-plans.md), and [backend setup/API guide](backend/README.md).
+For a local demo, follow the [deployment and operations guide](docs/deployment.md). Start with the [architecture guide](docs/architecture.md), [roadmap](docs/roadmap.md), [security and quality guide](docs/security-quality.md), [risk intelligence guide](docs/risk-intelligence.md), [demand forecasting guide](docs/demand-forecasting.md), [response-plan guide](docs/response-plans.md), and [backend setup/API guide](backend/README.md).

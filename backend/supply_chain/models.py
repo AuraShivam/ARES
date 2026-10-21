@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q
+from django.utils import timezone
 
 
 class TimestampedModel(models.Model):
@@ -94,13 +95,19 @@ class Inventory(SourceTrackedModel):
         return self.quantity <= self.reorder_point
 
 
-class InventoryMovement(TimestampedModel):
+class InventoryMovement(SourceTrackedModel):
     TYPES = [("receipt", "Receipt"), ("issue", "Issue"), ("adjustment", "Adjustment")]
     inventory = models.ForeignKey(Inventory, on_delete=models.PROTECT, related_name="movements")
+    purchase_order = models.ForeignKey(
+        "PurchaseOrder", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="inventory_movements",
+    )
     movement_type = models.CharField(max_length=20, choices=TYPES)
     # Receipts use positive deltas; issues use negative deltas; adjustments may be either.
     quantity_delta = models.DecimalField(max_digits=14, decimal_places=2)
-    balance_after = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    balance_after = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, default=None)
+    # Business event date is separate from created_at so imported history keeps its original date.
+    occurred_at = models.DateField(default=timezone.localdate, db_index=True)
     reference = models.CharField(max_length=80, blank=True)
     notes = models.CharField(max_length=500, blank=True)
     actor = models.CharField(max_length=120, blank=True)
@@ -117,6 +124,11 @@ class InventoryMovement(TimestampedModel):
                     | Q(movement_type="adjustment", quantity_delta__lt=0)
                 ),
                 name="inventory_movement_direction_valid",
+            ),
+            models.UniqueConstraint(
+                fields=["source_name", "source_key"],
+                condition=~Q(source_name="") & ~Q(source_key=""),
+                name="unique_inventory_movement_source_key",
             ),
         ]
 

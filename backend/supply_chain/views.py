@@ -20,6 +20,7 @@ from .models import (
     Shipment, Supplier, Warehouse,
 )
 from .predictive_risk import predictive_risk_report
+from .demand_forecast import demand_forecast_report
 from .risk_workflow import assess_and_record, risk_calibration_report, risk_configuration
 from .action_execution import execute_action
 from .notifications import queue_action_notification, queue_plan_notification
@@ -469,6 +470,11 @@ def risk_calibration(request):
 @api_view(["GET"])
 def predictive_risk(request):
     return Response(predictive_risk_report())
+
+
+@api_view(["GET"])
+def inventory_forecast(request):
+    return Response(demand_forecast_report())
 
 
 @api_view(["GET"])
