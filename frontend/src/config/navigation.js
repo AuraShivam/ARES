@@ -2,7 +2,6 @@ const NAV_GROUPS = [
   {
     title: 'Monitor',
     items: [
-      ['overview', 'Overview', '◫'],
       ['risk-intelligence', 'Risk intelligence', '⌁'],
       ['disruptions', 'Disruptions', '⌁'],
       ['response-plans', 'Response plans', '✓'],

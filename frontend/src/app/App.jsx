@@ -20,6 +20,7 @@ function App() {
   const [authSaving, setAuthSaving] = useState(false)
   const [authError, setAuthError] = useState('')
   const [section, setSection] = useState('overview')
+  const [expandedNavGroup, setExpandedNavGroup] = useState('Monitor')
   const [overview, setOverview] = useState(null)
   const [apiHealth, setApiHealth] = useState(null)
   const [feedStatus, setFeedStatus] = useState(null)
@@ -238,6 +239,8 @@ function App() {
 
   function navigate(nextSection) {
     setSection(nextSection)
+    const group = NAV_GROUPS.find((item) => item.items.some(([key]) => key === nextSection))
+    if (group) setExpandedNavGroup(group.title)
     setSearch('')
     setSort({ key: '', direction: 'asc' })
     setAssessment(null)
@@ -469,24 +472,48 @@ function App() {
         </a>
         <div className="workspace-pill"><span className="workspace-dot" /> <span>DEMO NETWORK</span><span className="workspace-chevron">⌄</span></div>
         <nav className="navigation" aria-label="Main navigation">
-          {NAV_GROUPS.map((group) => (
-            <div className="nav-group" key={group.title}>
-              <p className="nav-caption">{group.title}</p>
-              {group.items.map(([key, title, icon]) => (
-                <button
-                  aria-current={section === key ? 'page' : undefined}
-                  className={`nav-item ${section === key ? 'selected' : ''}`}
-                  key={key}
-                  onClick={() => navigate(key)}
-                  title={title}
-                >
-                  <span className="nav-icon" aria-hidden="true">{icon}</span>
-                  <span>{title}</span>
-                  {key === 'disruptions' && overview?.open_disruptions > 0 && <span className="nav-count">{overview.open_disruptions}</span>}
-                </button>
-              ))}
+          <button
+            aria-current={section === 'overview' ? 'page' : undefined}
+            className={`nav-item nav-overview ${section === 'overview' ? 'selected' : ''}`}
+            onClick={() => navigate('overview')}
+            title="Overview"
+          >
+            <span className="nav-icon" aria-hidden="true">◫</span>
+            <span>Overview</span>
+          </button>
+          {NAV_GROUPS.map((group) => {
+            const expanded = expandedNavGroup === group.title
+            const hasActiveItem = group.items.some(([key]) => key === section)
+            const groupId = `nav-group-${group.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+            return <div className={`nav-group ${expanded ? 'is-expanded' : ''} ${hasActiveItem ? 'has-active' : ''}`} key={group.title}>
+              <button
+                aria-controls={groupId}
+                aria-expanded={expanded}
+                className="nav-group-toggle"
+                onClick={() => setExpandedNavGroup(expanded ? '' : group.title)}
+                type="button"
+              >
+                <span className="nav-group-active-dot" aria-hidden="true" />
+                <span className="nav-group-title">{group.title}</span>
+                <span className="nav-group-chevron" aria-hidden="true">⌄</span>
+              </button>
+              <div className="nav-group-items" id={groupId} hidden={!expanded}>
+                {group.items.map(([key, title, icon]) => (
+                  <button
+                    aria-current={section === key ? 'page' : undefined}
+                    className={`nav-item ${section === key ? 'selected' : ''}`}
+                    key={key}
+                    onClick={() => navigate(key)}
+                    title={title}
+                  >
+                    <span className="nav-icon" aria-hidden="true">{icon}</span>
+                    <span>{title}</span>
+                    {key === 'disruptions' && overview?.open_disruptions > 0 && <span className="nav-count">{overview.open_disruptions}</span>}
+                  </button>
+                ))}
+              </div>
             </div>
-          ))}
+          })}
         </nav>
         <div className="sidebar-bottom">
           <span className={`connection-light ${apiConnected ? 'is-online' : ''}`} />
