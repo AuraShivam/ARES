@@ -24,7 +24,7 @@ function App() {
   const [overview, setOverview] = useState(null)
   const [apiHealth, setApiHealth] = useState(null)
   const [feedStatus, setFeedStatus] = useState(null)
-  const [riskData, setRiskData] = useState({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null })
+  const [riskData, setRiskData] = useState({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
   const [records, setRecords] = useState([])
   const [homeData, setHomeData] = useState({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
   const [loading, setLoading] = useState(true)
@@ -50,7 +50,7 @@ function App() {
       setApiHealth(null)
       setRecords([])
       setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
-      setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null })
+      setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
       setLastUpdated(null)
       setRefreshState('connecting')
       setModal('')
@@ -93,13 +93,15 @@ function App() {
         ])
         setHomeData({ disruptions: rowsFrom(disruptions), shipments: rowsFrom(shipments), inventory: rowsFrom(inventory), riskAlerts: rowsFrom(riskAlerts) })
       } else if (section === 'risk-intelligence') {
-        const [assessments, alerts, disruptions, policy, calibration, outcomes] = await Promise.all([
+        const [assessments, alerts, disruptions, policy, calibration, outcomes, predictive, shipments] = await Promise.all([
           request('/risk/assessments/', { signal }),
           request('/risk/alerts/', { signal }),
           request('/disruptions/', { signal }),
           request('/risk/policy/', { signal }),
           request('/risk/calibration/', { signal }),
           auth?.is_approver ? request('/risk/outcomes/', { signal }) : Promise.resolve([]),
+          request('/risk/predictive/', { signal }),
+          request('/shipments/', { signal }),
         ])
         setRiskData({
           assessments: rowsFrom(assessments),
@@ -108,6 +110,8 @@ function App() {
           outcomes: rowsFrom(outcomes),
           policy,
           calibration,
+          predictive,
+          shipments: rowsFrom(shipments),
         })
         setRecords([])
         setFeedStatus(null)
@@ -281,6 +285,25 @@ function App() {
     }
   }
 
+  async function verifyShipmentDelivery(shipmentId, payload) {
+    setBusyId(shipmentId)
+    setError('')
+    try {
+      await request(`/shipments/${shipmentId}/verify-delivery/`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      setNotice('Delivery outcome verified and added to the model training history.')
+      await refresh()
+      return true
+    } catch (requestError) {
+      setError(requestError.message)
+      return false
+    } finally {
+      setBusyId('')
+    }
+  }
+
   async function markReviewed(disruptionId) {
     try {
       await request(`/disruptions/${disruptionId}/`, { method: 'PATCH', body: JSON.stringify({ status: 'review' }) })
@@ -390,7 +413,7 @@ function App() {
     setApiHealth(null)
     setRecords([])
     setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
-    setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null })
+    setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
     setLastUpdated(null)
     setRefreshState('connecting')
   }
@@ -557,7 +580,7 @@ function App() {
           {section === 'overview'
             ? <OverviewPage data={overview} homeData={homeData} loading={loading} apiHealth={apiHealth} refreshState={refreshState} lastUpdatedLabel={lastUpdatedLabel} onNavigate={navigate} onAssess={assessRisk} busyId={busyId} />
             : section === 'risk-intelligence'
-              ? <RiskIntelligencePage data={riskData} loading={loading} canReview={Boolean(auth.is_approver)} onSubmitOutcome={saveRiskOutcome} saving={Boolean(busyId)} />
+              ? <RiskIntelligencePage data={riskData} loading={loading} canReview={Boolean(auth.is_approver)} onSubmitOutcome={saveRiskOutcome} onVerifyDelivery={verifyShipmentDelivery} savingId={busyId} />
             : <section className="panel records-panel">
               <div className="records-heading">
                 <div><h2>{current.title}</h2><p>{records.length} {records.length === 1 ? 'record' : 'records'} in the local dataset</p></div>

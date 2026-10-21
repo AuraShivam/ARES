@@ -1,6 +1,6 @@
 # ARES risk intelligence
 
-ARES currently uses deterministic rules rather than a trained or hosted AI model. `POST /api/risk/assess/` returns a 0–100 score, a risk band, a point-by-point explanation, linked evidence coverage, data gaps, and a human-reviewed recommendation. The rules are implemented in `backend/supply_chain/risk.py`.
+ARES has two distinct risk capabilities. `POST /api/risk/assess/` remains a transparent, deterministic disruption assessment. A separate shipment-delay model trains on demand from approver-verified delivery outcomes and only returns predictions when the stored history meets its minimum data requirements. The disruption rules are implemented in `backend/supply_chain/risk.py`; the shipment predictor is in `backend/supply_chain/predictive_risk.py`.
 
 ## Evidence used
 
@@ -40,6 +40,22 @@ Every call to `POST /api/risk/assess/` stores an assessment snapshot with its ex
 
 Contributions are summed and capped at 100. Bands are low (0–34), moderate (35–59), high (60–79), and critical (80–100). Recommendations use the same band thresholds and remain advisory; ARES does not execute operational actions.
 
+## Predictive shipment delay and shortage outlook
+
+`GET /api/risk/predictive/` builds the current model from completed shipments with an ETA, an actual delivery date, `delivery_outcome_verified=true`, and delivered status. The API trains a scikit-learn logistic-regression classifier for late-arrival probability and, when enough late examples exist, a random-forest regressor for delay duration. It trains from current database records on request; no model artifact or predictions are seeded in the demo database.
+
+The pilot readiness gate requires at least 40 eligible verified shipments, including at least 10 late and 10 on-time shipments. Delay ranges separately require at least 8 late examples. These are minimum technical gates, not evidence that the model is accurate. The API marks predictions experimental and not independently validated. “Model confidence” is the highest class probability from the classifier; it is not a calibrated guarantee. The explanation lists local logistic-model feature contributions as associations, not causes.
+
+Features include supplier late rate and average delay among verified outcomes known before the purchase-order date, recent supplier performance, order-to-promise window, order quantity, supplier, carrier, route, and promised-arrival month. Set `ordered_at` when importing historical purchase orders so the supplier-history features use the correct point in time. If it is absent, ARES falls back to the purchase order's database creation date.
+
+Import shipment `eta` and `actual_delivery_date` as dates. For training, keep `eta` as the original committed promise; replacing it with a revised forecast changes the late/on-time label. An imported actual date is not trusted automatically. An ARES staff member or `ares_approvers` member must verify the delivered shipment using `POST /api/shipments/<shipment-uuid>/verify-delivery/` with `actual_delivery_date` and evidence notes. Editing a verified shipment's model inputs or its purchase order's supplier/date/quantity clears the verification and requires a new review. Verification is audited.
+
+Delay-related shortage estimates use the recent 30 days of recorded inventory issue movements to estimate days of stock cover. A material needs at least three issue records spanning at least seven observed days and a positive consumption rate. On-hand quantity is aggregated across warehouses because ARES does not yet map shipments to a destination warehouse. The estimate combines classifier late probability with the conditional delay forest distribution and reports the highest per-material exposure; it does not assume materials fail independently. If demand or delay history is insufficient, the API returns a null estimate with an explanation. A projected stockout before the promised arrival is shown separately from shortage risk attributable to a later delay.
+
+Supplier trends compare the late-arrival rate in the most recent 90 days with the preceding 90 days. A direction is shown only when both periods contain at least three verified shipments; a rise means a difference of at least 10 percentage points. This is an observed-history trend, not a causal claim.
+
+The dashboard's **Risk intelligence** page shows shipment predictions, confidence, feature factors, duration ranges, shortage likelihood, supplier trends, and an approver form to verify delivered outcomes. The current demo data has no verified shipment training labels, so it should show the data-readiness message until real outcomes are entered and reviewed. Never present an illustrative probability as a prediction from the current demo data.
+
 ## Representative scenario evaluation
 
 From `backend/`, run:
@@ -67,5 +83,6 @@ Only a staff user or member of `ares_approvers` can inspect, enter, or correct r
 - Inputs are the records currently stored in ARES. GDACS is a global natural-disaster signal, not supplier/carrier telemetry, and does not confirm that a particular ARES facility or route is affected.
 - Region matching is a simple normalized text match, not geospatial analysis.
 - Order count, stock coverage, and source age are proxies. The rules do not model revenue, substitution time, demand forecasts, or network propagation.
-- No trained AI model, probability of disruption, or empirically calibrated loss estimate is claimed.
+- The shipment model estimates late delivery, not disruption probability or monetary loss. Its probability scores are experimental, not independently calibrated, and depend on enough representative, verified historical outcomes.
+- The shortage estimate uses recent issue movements as a demand proxy and a conditional delay distribution; it is not a full demand forecast or multi-echelon inventory simulation.
 - Source-event reassessment currently runs for GDACS ingestion. Changes to unrelated supplier, inventory, purchase-order, or shipment records do not automatically fan out into disruption reassessments.

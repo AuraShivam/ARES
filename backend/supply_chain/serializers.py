@@ -195,6 +195,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
+        previous_order_quantity = sum((line.quantity for line in instance.lines.all()), Decimal("0"))
+        previous_model_features = (instance.supplier_id, instance.ordered_at, previous_order_quantity)
         lines_data = validated_data.pop("lines", serializers.empty)
         instance = super().update(instance, validated_data)
         if lines_data is not serializers.empty:
@@ -226,6 +228,18 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 first.quantity = instance.quantity
                 first.unit_price = instance.unit_price
                 first.save(update_fields=["material", "quantity", "unit_price", "updated_at"])
+        current_order_quantity = sum((line.quantity for line in instance.lines.all()), Decimal("0"))
+        current_model_features = (instance.supplier_id, instance.ordered_at, current_order_quantity)
+        if current_model_features != previous_model_features:
+            Shipment.objects.filter(
+                purchase_order=instance, delivery_outcome_verified=True,
+            ).update(
+                delivery_outcome_verified=False,
+                delivery_outcome_verified_at=None,
+                delivery_outcome_verified_by="",
+                delivery_outcome_evidence="",
+                updated_at=timezone.now(),
+            )
         return instance
 
 
@@ -274,7 +288,30 @@ class ShipmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Shipment
         fields = "__all__"
-        read_only_fields = ("source_name", "source_key", "source_updated_at")
+        read_only_fields = (
+            "source_name", "source_key", "source_updated_at", "actual_delivery_date",
+            "delivery_outcome_verified", "delivery_outcome_verified_at",
+            "delivery_outcome_verified_by", "delivery_outcome_evidence",
+        )
+
+    def update(self, instance, validated_data):
+        # If a verified shipment's model inputs change, require a fresh outcome review.
+        feature_fields = ("purchase_order", "eta", "carrier", "origin", "destination", "status")
+        features_changed = any(
+            field in validated_data and validated_data[field] != getattr(instance, field)
+            for field in feature_fields
+        )
+        if instance.delivery_outcome_verified and features_changed:
+            instance.delivery_outcome_verified = False
+            instance.delivery_outcome_verified_at = None
+            instance.delivery_outcome_verified_by = ""
+            instance.delivery_outcome_evidence = ""
+        return super().update(instance, validated_data)
+
+
+class DeliveryOutcomeVerificationSerializer(serializers.Serializer):
+    actual_delivery_date = serializers.DateField()
+    evidence_notes = serializers.CharField(max_length=10000, allow_blank=False, trim_whitespace=True)
 
 
 class DisruptionSerializer(serializers.ModelSerializer):

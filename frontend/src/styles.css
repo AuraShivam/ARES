@@ -573,12 +573,35 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .risk-correction-note { margin: -3px 0 0; color: #8a7041; font-size: 8px; line-height: 1.5; }
 .risk-review-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 9px; padding-top: 10px; border-top: 1px solid #edf1f0; }
 .risk-review-actions small { color: #879395; font-size: 8px; }
+.predictive-risk-panel { display: grid; gap: 10px; }
+.predictive-risk-panel > .panel-heading { margin-bottom: 0; }
+.predictive-model-metrics { margin-top: 0; }
+.predictive-shipment-list { display: grid; gap: 9px; }
+.predictive-shipment-card { padding: 12px; border: 1px solid #e5edeb; border-radius: 9px; background: #fbfdfc; }
+.predictive-shipment-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.predictive-shipment-heading > div { display: grid; gap: 4px; min-width: 0; }
+.predictive-shipment-heading strong { overflow: hidden; color: #344d51; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.predictive-shipment-heading small, .predictive-shipment-metrics small { color: #879395; font-size: 8px; line-height: 1.4; }
+.predictive-probability { color: #a94e49; font: 700 17px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+.predictive-probability small { color: #879395; font: 8px Inter, 'Segoe UI', sans-serif; }
+.predictive-shipment-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.predictive-shipment-metrics > span { display: flex; min-width: 0; flex-direction: column; gap: 5px; padding: 8px; border-radius: 7px; background: #f2f7f5; }
+.predictive-shipment-metrics strong { color: #40585c; font-size: 9px; line-height: 1.4; }
+.predictive-factors { margin-top: 9px; color: #687a7d; font-size: 8px; line-height: 1.5; }
+.predictive-factors summary { color: #087e76; cursor: pointer; font-weight: 700; }
+.predictive-factors ul { display: grid; gap: 5px; margin: 7px 0 0; padding-left: 17px; }
+.predictive-factors li strong { color: #43595d; }
+.predictive-lower-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; padding-top: 8px; border-top: 1px solid #edf1f0; }
+.predictive-trends { min-width: 0; }
+.predictive-trends .panel-heading { margin: 0; }
 
 @media (max-width: 1000px) {
-  .risk-intelligence-grid { grid-template-columns: 1fr; }
+  .risk-intelligence-grid, .predictive-lower-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 540px) {
   .risk-calibration-metrics { grid-template-columns: 1fr; }
+  .predictive-shipment-metrics { grid-template-columns: 1fr; }
+  .predictive-shipment-heading { align-items: flex-start; }
   .risk-alert-row, .risk-assessment-row { grid-template-columns: minmax(0, 1fr) auto; }
   .risk-alert-score { grid-column: 2; }
   .risk-alert-row > .status-badge, .risk-assessment-row > .status-badge { display: none; }

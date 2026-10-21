@@ -71,10 +71,11 @@ const TABLE_COLUMNS = {
   ],
   shipments: [
     ['reference', 'Reference'], ['purchase_order_number', 'Purchase order'], ['origin', 'Origin'],
-    ['destination', 'Destination'], ['eta', 'ETA'], ['risk_score', 'Risk'], ['status', 'Status'],
+    ['destination', 'Destination'], ['eta', 'Promised'], ['actual_delivery_date', 'Actual'],
+    ['delivery_outcome_verified', 'Outcome verified'], ['risk_score', 'Risk'], ['status', 'Status'],
   ],
   'purchase-orders': [
-    ['number', 'PO number'], ['supplier_name', 'Supplier'], ['line_count', 'Lines'],
+    ['number', 'PO number'], ['supplier_name', 'Supplier'], ['ordered_at', 'Ordered'], ['line_count', 'Lines'],
     ['expected_date', 'Expected'], ['status', 'Status'], ['total_value', 'Total value'],
   ],
   inventory: [

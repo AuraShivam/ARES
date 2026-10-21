@@ -47,13 +47,13 @@ IMPORT_SCHEMAS = {
     "purchase_order": {
         "label": "Purchase orders",
         "required": ["number", "supplier_code", "material_sku", "quantity"],
-        "optional": ["expected_date", "status", "currency", "unit_price", "source_key", "source_updated_at"],
+        "optional": ["ordered_at", "expected_date", "status", "currency", "unit_price", "source_key", "source_updated_at"],
         "key": "number",
     },
     "shipment": {
         "label": "Shipments",
         "required": ["reference", "purchase_order_number", "origin", "destination"],
-        "optional": ["carrier", "eta", "status", "risk_score", "source_key", "source_updated_at"],
+        "optional": ["carrier", "eta", "actual_delivery_date", "status", "risk_score", "source_key", "source_updated_at"],
         "key": "reference",
     },
     "disruption": {
@@ -301,6 +301,7 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         _set_reference(candidate, row, "supplier_code", "supplier", Supplier, "code", errors, required=True)
         _set_reference(candidate, row, "material_sku", "material", Material, "sku", errors, required=True)
         _set_value(candidate, row, "quantity", "quantity", errors, _parse_decimal, required=True)
+        _set_value(candidate, row, "ordered_at", "ordered_at", errors, _parse_date)
         _set_value(candidate, row, "expected_date", "expected_date", errors, _parse_date)
         _set_value(candidate, row, "status", "status", errors, str.casefold)
         _set_value(candidate, row, "currency", "currency", errors, str.upper)
@@ -322,8 +323,17 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         _set_value(candidate, row, "destination", "destination", errors, required=True)
         _set_value(candidate, row, "carrier", "carrier", errors)
         _set_value(candidate, row, "eta", "eta", errors, _parse_date)
+        _set_value(candidate, row, "actual_delivery_date", "actual_delivery_date", errors, _parse_date)
         _set_value(candidate, row, "status", "status", errors, str.casefold)
         _set_value(candidate, row, "risk_score", "risk_score", errors, _parse_integer)
+        if existing and existing.delivery_outcome_verified and any(
+            getattr(candidate, field) != getattr(existing, field)
+            for field in ("purchase_order_id", "eta", "carrier", "origin", "destination", "actual_delivery_date", "status")
+        ):
+            candidate.delivery_outcome_verified = False
+            candidate.delivery_outcome_verified_at = None
+            candidate.delivery_outcome_verified_by = ""
+            candidate.delivery_outcome_evidence = ""
     else:
         _set_value(candidate, row, "title", "title", errors, required=True)
         _set_value(candidate, row, "disruption_type", "disruption_type", errors)
@@ -489,6 +499,14 @@ def _apply_candidate(entity_type, candidate, existing, batch):
             )
         return candidate
 
+    previous_po_features = (
+        (
+            existing.supplier_id,
+            existing.ordered_at,
+            sum((line.quantity for line in existing.lines.all()), Decimal("0")),
+        )
+        if entity_type == "purchase_order" and existing else None
+    )
     candidate.save()
     if entity_type == "purchase_order":
         existing_line = existing.lines.order_by("line_number").first() if existing else None
@@ -504,6 +522,18 @@ def _apply_candidate(entity_type, candidate, existing, batch):
                 material=candidate.material,
                 quantity=candidate.quantity,
                 unit_price=candidate.unit_price,
+            )
+        current_po_quantity = sum((line.quantity for line in candidate.lines.all()), Decimal("0"))
+        current_po_features = (candidate.supplier_id, candidate.ordered_at, current_po_quantity)
+        if previous_po_features is not None and current_po_features != previous_po_features:
+            Shipment.objects.filter(
+                purchase_order=candidate, delivery_outcome_verified=True,
+            ).update(
+                delivery_outcome_verified=False,
+                delivery_outcome_verified_at=None,
+                delivery_outcome_verified_by="",
+                delivery_outcome_evidence="",
+                updated_at=timezone.now(),
             )
     return candidate
 

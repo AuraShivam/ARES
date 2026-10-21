@@ -30,7 +30,8 @@ function TableCell({ section, field, record }) {
   if (value === null || value === undefined || value === '') return <span className="muted-cell">—</span>
   if (['status', 'severity', 'criticality', 'movement_type', 'action', 'warehouse_type'].includes(field)) return <StatusBadge value={value} />
   if (field === 'active' || field === 'below_reorder_point') return <StatusBadge value={field === 'active' ? (value ? 'active' : 'inactive') : (value ? 'reorder' : 'healthy')} />
-  if (['eta', 'expected_date', 'due_date'].includes(field)) return formatDate(value)
+  if (field === 'delivery_outcome_verified') return <StatusBadge value={value ? 'verified' : 'unverified'} />
+  if (['eta', 'actual_delivery_date', 'ordered_at', 'expected_date', 'due_date'].includes(field)) return formatDate(value)
   if (field === 'created_at' || field === 'updated_at' || field === 'completed_at') return formatDate(value, true)
   if (field === 'entity_id' || field === 'purchase_order') return <span className="mono-cell" title={value}>{compactId(value)}</span>
   if (field === 'risk_score') return <span className={`risk-value ${Number(value) >= 60 ? 'high' : Number(value) >= 35 ? 'medium' : ''}`}>{formatNumber(value)}<small>/100</small></span>

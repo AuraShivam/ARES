@@ -12,8 +12,8 @@ Import in dependency order. Materials may refer to suppliers, inventory refers t
 | Materials | `sku`, `name` | `category`, `unit`, `criticality`, `preferred_supplier_code`, `source_key`, `source_updated_at` | `sku` |
 | Warehouses | `code`, `name` | `region`, `country`, `warehouse_type`, `active`, `source_key`, `source_updated_at` | `code` |
 | Inventory balances | `material_sku`, `warehouse_code`, `quantity` | `reorder_point`, `unit_cost`, `source_key`, `source_updated_at` | `material_sku` + `warehouse_code` |
-| Purchase orders | `number`, `supplier_code`, `material_sku`, `quantity` | `expected_date`, `status`, `currency`, `unit_price`, `source_key`, `source_updated_at` | `number` |
-| Shipments | `reference`, `purchase_order_number`, `origin`, `destination` | `carrier`, `eta`, `status`, `risk_score`, `source_key`, `source_updated_at` | `reference` |
+| Purchase orders | `number`, `supplier_code`, `material_sku`, `quantity` | `ordered_at`, `expected_date`, `status`, `currency`, `unit_price`, `source_key`, `source_updated_at` | `number` |
+| Shipments | `reference`, `purchase_order_number`, `origin`, `destination` | `carrier`, `eta`, `actual_delivery_date`, `status`, `risk_score`, `source_key`, `source_updated_at` | `reference` |
 | Disruptions | `source_key`, `title`, `severity` | `disruption_type`, `description`, `affected_region`, `status`, `confidence`, `affected_supplier_code`, `shipment_reference`, `source_updated_at` | `source_name` + `source_key` |
 
 Templates can be downloaded from the import dialog. Files must be UTF-8 CSV, at most 5 MB, and contain no more than 2,000 nonblank data rows. Header matching ignores case and normalizes spaces/punctuation to underscores; unsupported, duplicate, or missing required headers are rejected.
@@ -31,6 +31,7 @@ Dates use `YYYY-MM-DD`. `source_updated_at` must be a timezone-aware ISO 8601 ti
 - On an update, blank optional cells preserve existing values; omitted columns also preserve values. On a new record, blank optional cells use the model's default or empty value. `source_name` records the latest import source, and `source_key` defaults to the natural key when no source key is provided.
 - Updating an existing inventory balance creates an inventory adjustment movement when the quantity changes. The initial balance created for a new inventory record does not create a movement.
 - Shipment rows resolve their purchase-order number to an existing order. Disruption rows match on the selected source name and source key; optional supplier/shipment references must already exist.
+- `ordered_at` and `actual_delivery_date` are needed to reconstruct historical delay examples. An imported actual date is unverified and is excluded from model training until an ARES approver reviews it in **Risk intelligence**.
 
 ## GDACS live feed
 

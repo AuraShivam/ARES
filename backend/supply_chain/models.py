@@ -127,6 +127,7 @@ class PurchaseOrder(SourceTrackedModel):
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="purchase_orders")
     material = models.ForeignKey(Material, on_delete=models.PROTECT, related_name="purchase_orders")
     quantity = models.DecimalField(max_digits=14, decimal_places=2)
+    ordered_at = models.DateField(null=True, blank=True)
     expected_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default="draft")
     currency = models.CharField(max_length=3, default="USD")
@@ -171,11 +172,22 @@ class Shipment(SourceTrackedModel):
     destination = models.CharField(max_length=120)
     carrier = models.CharField(max_length=120, blank=True)
     eta = models.DateField(null=True, blank=True)
+    actual_delivery_date = models.DateField(null=True, blank=True)
+    delivery_outcome_verified = models.BooleanField(default=False)
+    delivery_outcome_verified_at = models.DateTimeField(null=True, blank=True)
+    delivery_outcome_verified_by = models.CharField(max_length=150, blank=True)
+    delivery_outcome_evidence = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default="planned")
     risk_score = models.PositiveSmallIntegerField(default=10, validators=[MaxValueValidator(100)])
 
     class Meta:
         ordering = ["eta", "reference"]
+        indexes = [
+            models.Index(
+                fields=["delivery_outcome_verified", "status", "eta"],
+                name="verified_delivery_risk_idx",
+            ),
+        ]
 
 
 class Disruption(SourceTrackedModel):

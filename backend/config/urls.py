@@ -10,7 +10,7 @@ from supply_chain.views import (
     ResponseActionViewSet,
     ResponsePlanViewSet, RiskAlertViewSet, RiskAssessmentViewSet, ShipmentViewSet,
     SupplierViewSet, WarehouseViewSet, health, overview, risk_assess,
-    risk_calibration, risk_outcome_upsert, risk_policy,
+    predictive_risk, risk_calibration, risk_outcome_upsert, risk_policy,
 )
 
 router = DefaultRouter()
@@ -47,6 +47,7 @@ urlpatterns = [
     path("api/risk/policy/", risk_policy, name="risk-policy"),
     path("api/risk/outcomes/", risk_outcome_upsert, name="risk-outcome-upsert"),
     path("api/risk/calibration/", risk_calibration, name="risk-calibration"),
+    path("api/risk/predictive/", predictive_risk, name="risk-predictive"),
     path("api/health/", health, name="health"),
 ]
 

@@ -9,7 +9,7 @@ ARES accepts data through its authenticated APIs, dashboard forms, and validated
 .
 ├── backend/
 │   ├── config/               # Django settings, routes, WSGI, and ASGI
-│   ├── supply_chain/         # Domain models, APIs, migrations, and risk rules
+│   ├── supply_chain/         # Domain models, APIs, migrations, and risk engines
 │   ├── manage.py
 │   ├── requirements.txt
 │   └── README.md             # Backend setup and API reference

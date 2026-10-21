@@ -19,6 +19,7 @@ from .models import (
     ResponseActionExecution, RiskAlert, RiskAssessmentSnapshot, RiskOutcome,
     Shipment, Supplier, Warehouse,
 )
+from .predictive_risk import predictive_risk_report
 from .risk_workflow import assess_and_record, risk_calibration_report, risk_configuration
 from .action_execution import execute_action
 from .notifications import queue_action_notification, queue_plan_notification
@@ -29,6 +30,7 @@ from .serializers import (
     RejectionNotesSerializer, ResponseActionSerializer, ResponsePlanSerializer,
     RiskAlertSerializer, RiskAssessmentSnapshotSerializer, RiskOutcomeSerializer,
     RiskOutcomeUpsertSerializer, NotificationDeliverySerializer,
+    DeliveryOutcomeVerificationSerializer,
     ResponseActionExecutionRequestSerializer, ResponseActionExecutionSerializer,
     ReviewNotesSerializer,
     ShipmentSerializer, SupplierSerializer, WarehouseSerializer,
@@ -125,6 +127,38 @@ class InventoryMovementViewSet(AuditMixin, mixins.CreateModelMixin, mixins.ListM
 class ShipmentViewSet(AuditedModelViewSet):
     queryset = Shipment.objects.select_related("purchase_order").all()
     serializer_class = ShipmentSerializer
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="verify-delivery",
+        permission_classes=[IsSupplyChainApprover],
+    )
+    def verify_delivery(self, request, pk=None):
+        shipment = self.get_object()
+        if shipment.status != "delivered":
+            raise ValidationError({"status": "Mark the shipment delivered before verifying its outcome."})
+        serializer = DeliveryOutcomeVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actual_date = serializer.validated_data["actual_delivery_date"]
+        order_date = shipment.purchase_order.ordered_at or shipment.purchase_order.created_at.date()
+        if actual_date > timezone.localdate():
+            raise ValidationError({"actual_delivery_date": "A verified actual delivery date cannot be in the future."})
+        if actual_date < order_date:
+            raise ValidationError({"actual_delivery_date": "Actual delivery cannot be earlier than the purchase-order date."})
+
+        before = self._snapshot(shipment)
+        shipment.actual_delivery_date = actual_date
+        shipment.delivery_outcome_verified = True
+        shipment.delivery_outcome_verified_at = timezone.now()
+        shipment.delivery_outcome_verified_by = _reviewer_identity(request.user)
+        shipment.delivery_outcome_evidence = serializer.validated_data["evidence_notes"]
+        shipment.save(update_fields=[
+            "actual_delivery_date", "delivery_outcome_verified", "delivery_outcome_verified_at",
+            "delivery_outcome_verified_by", "delivery_outcome_evidence", "updated_at",
+        ])
+        self._audit(shipment, "update", before=before, after=self._snapshot(shipment))
+        return Response(self.get_serializer(shipment).data)
 
 
 class DisruptionViewSet(AuditedModelViewSet):
@@ -430,6 +464,11 @@ def risk_outcome_upsert(request):
 @api_view(["GET"])
 def risk_calibration(request):
     return Response(risk_calibration_report())
+
+
+@api_view(["GET"])
+def predictive_risk(request):
+    return Response(predictive_risk_report())
 
 
 @api_view(["GET"])

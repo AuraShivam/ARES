@@ -9,6 +9,7 @@ For repository-level orientation, see the [architecture guide](../docs/architect
 - Django REST APIs for suppliers, materials, warehouses, inventory, purchase orders and their line items, shipments, disruptions, inventory movements, and audit history.
 - A scheduled GDACS connector that ingests global recent disaster alerts, deduplicates source events, and reports feed freshness and sync results.
 - A transparent, rule-based risk assessment endpoint that stores explainable assessment history, reassesses material GDACS event changes, and maintains threshold, deduplicated, cooldown-aware advisory alerts.
+- An experimental scikit-learn shipment-delay predictor trained on demand from approver-verified delivery outcomes, with factors, conditional delay ranges, supplier trends, and stock-cover estimates when movement history is sufficient.
 - Approver-reviewed incident outcomes and a descriptive report for comparing historical labels with the latest risk scores.
 - An idempotent email outbox for risk and response-plan events, plus audited dry-run and explicitly approved webhook execution for selected response actions.
 - Responsive React dashboard for network signals, operational records, disruption assessment, creating disruptions and multi-line purchase orders, recording inventory movements, and previewing/committing validated CSV imports.
@@ -17,6 +18,8 @@ For repository-level orientation, see the [architecture guide](../docs/architect
 Risk recommendations are advisory. A configured webhook can run only for a selected action after plan approval, a separate approver execution request, and an explicit environment-level enable flag.
 
 ## Run locally
+
+The backend requires Python 3.11 or newer for the predictive-risk dependencies.
 
 Backend (from this directory):
 
@@ -81,6 +84,7 @@ For a trusted local demo, `.env.example` sets `DJANGO_DEBUG=true` and Django use
 - `GET /api/risk/alerts/?status=active` lists current threshold alerts. `GET /api/risk/policy/` returns the effective alert threshold, cooldown, and risk bands.
 - `GET /api/risk/outcomes/` lists reviewed labels for staff and `ares_approvers`; `POST /api/risk/outcomes/` records or corrects a verified incident outcome. Submit `{ "disruption_id": "<uuid>", "outcome": "impact", "evidence_notes": "..." }`; use `no_impact` for a verified incident with no material supply-chain impact. The dashboard's Risk intelligence page provides the reviewer workflow and calibration report.
 - `GET /api/risk/calibration/` and `python manage.py calibrate_risk` summarize observed outcomes by risk band and precision/recall at the alert threshold. This is descriptive, uses only reviewer-entered labels, and does not tune or train the scoring rules.
+- `GET /api/risk/predictive/` trains the experimental shipment model from verified historical delivery records and returns readiness, delay estimates, supplier trends, and stock-shortage estimates. It returns no predictions until the minimum training sample is available. `POST /api/shipments/<shipment-uuid>/verify-delivery/` lets staff or `ares_approvers` verify a delivered shipment with its actual date and evidence notes.
 - `GET /api/health/`
 - `GET /api/feeds/status/` returns the GDACS source's last attempt, last success, recent event count, and sync errors.
 - `POST /api/auth/login/` accepts `username` and `password`, returning an expiring API token; `GET /api/auth/me/` returns the signed-in user; `POST /api/auth/logout/` revokes the token.
@@ -114,4 +118,4 @@ The API enforces authentication and approver permissions for the response review
 
 See [the import guide](../docs/data-imports.md) for supported columns, natural keys, import order, duplicate policies, blank-cell behavior, and API details. Imports are supported for suppliers, materials, warehouses, inventory balances, purchase orders, shipments, and disruptions. GDACS source events become advisory disruptions and retain provider attribution and source timestamps. They do not prove that a particular supplier, carrier, facility, or route is affected.
 
-The deterministic risk rules combine disruption severity and confidence with linked supplier, shipment, order, material, inventory, region, and source-freshness evidence. From this directory, run `python manage.py evaluate_risk` to see the representative scenarios and their target bands. See [the risk guide](../docs/risk-intelligence.md) for weights, alert behavior, reviewed outcome labels, and limitations; scenario checks are not an empirical prediction-quality benchmark.
+The deterministic disruption rules combine severity and confidence with linked supplier, shipment, order, material, inventory, region, and source-freshness evidence. Shipment-delay probabilities are a separate experimental model based only on verified actual delivery dates; the demo data does not contain verified training labels. From this directory, run `python manage.py evaluate_risk` to see the disruption-rule scenarios and target bands. See the [risk guide](../docs/risk-intelligence.md) for training requirements, verification, prediction limits, weights, and alert behavior; rule scenarios are not an empirical prediction-quality benchmark.
