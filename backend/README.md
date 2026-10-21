@@ -18,6 +18,26 @@ For repository-level orientation, see the [architecture guide](../docs/architect
 
 Risk recommendations are advisory. A configured webhook can run only for a selected action after plan approval, a separate approver execution request, and an explicit environment-level enable flag.
 
+## How the backend works
+
+1. The React client sends JSON or validated CSV uploads to Django REST Framework. Login issues a time-limited API token; domain endpoints require authentication.
+2. Serializers validate field values and relationships before a write. Approver-only endpoints enforce role checks on the server, so the browser cannot approve its own request by changing a payload.
+3. Django stores operational records in PostgreSQL. Inventory movement writes update the balance and append the movement record in a transaction. CSV imports first create a preview; commit revalidates every row and writes the batch atomically.
+4. Risk assessment and demand-planning endpoints combine saved records into advisory reports. The shipment model trains from approver-verified delivery outcomes. The demand model trains from dated issue movements. Neither invents history when training data is missing.
+5. Successful changes are audited and publish small WebSocket invalidation events after commit. The browser reloads current data from the API; it keeps a 30-second polling fallback. Separate workers can poll GDACS and dispatch configured notifications.
+
+## Main workflows
+
+- **Supply-chain operations:** create or import suppliers, materials, warehouses, balances, purchase orders, shipment records, and disruptions. Purchase orders can contain multiple material lines.
+- **Stock tracking:** submit a receipt, issue, or adjustment. Live movements update on-hand stock; historical movement imports keep their original business date and do not change today's balance. Link receipt history to purchase orders when possible to improve lead-time estimates.
+- **Disruption review:** assess a reported event, inspect its evidence and data gaps, review threshold alerts, and have an approver record confirmed impact or no-impact outcomes.
+- **Shipment delay learning:** mark delivered dates as verified only after an approver reviews evidence. Only verified completed shipments enter the experimental model's training set.
+- **Demand planning:** import dated usage movements, then review 7/30/90-day forecasts, stockout estimates, safety stock, and suggested reorder quantities. Each material needs at least 60 days of history and 10 distinct issue dates; current stock by itself is insufficient.
+- **Response execution:** draft and assign mitigation actions, submit the plan for approval, track progress, and inspect the audit trail. Email is disabled by default; live webhooks need a configured host allowlist, an approved active plan, a separate approver request, and an environment-level enable flag.
+- **External hazard monitoring:** poll GDACS for recent global disaster alerts. These alerts provide context and are not supplier, carrier, or facility telemetry.
+
+See the [risk guide](../docs/risk-intelligence.md), [demand-planning guide](../docs/demand-forecasting.md), [CSV import guide](../docs/data-imports.md), and [response-plan guide](../docs/response-plans.md) for model limits and operating details.
+
 ## Run locally
 
 The backend requires Python 3.11 or newer for the predictive-risk dependencies.
@@ -62,7 +82,7 @@ Open the Vite URL shown in the terminal. The dashboard expects the API at `http:
 
 PostgreSQL 14 or newer must be available before running migrations. Configure `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_PORT` using values from your local PostgreSQL setup or database administrator. Leave `POSTGRES_HOST` blank to use the local Unix socket; only set `POSTGRES_SSLMODE` when your database administrator specifies a TLS mode. Never commit `.env` or place real credentials in `.env.example`.
 
-The dashboard includes searchable and sortable views for the supply-chain records, CSV export for the current view, and forms for disruption intake, purchase-order creation, and inventory receipts/issues/adjustments. The CSV import screen supports downloadable templates, row validation, duplicate handling, and a review step before committing. Assessment scores show their factors and advisory recommendation before a user can mark the disruption under review.
+The dashboard includes searchable and sortable views for supply-chain records, CSV export for the current view, and forms for disruption intake, purchase-order creation, and inventory receipts/issues/adjustments. The CSV import screen supports downloadable templates, row validation, duplicate handling, and a review step before committing. Historical movement templates include an event date and optional purchase-order link; imported events do not change current balances. Assessment scores show their factors and advisory recommendation before a user can mark the disruption under review.
 
 ## Authentication and access
 
@@ -76,7 +96,7 @@ For a trusted local demo, `.env.example` sets `DJANGO_DEBUG=true` and Django use
 
 - CRUD: `/api/suppliers/`, `/api/materials/`, `/api/warehouses/`, `/api/inventory/`, `/api/purchase-orders/`, `/api/shipments/`, `/api/disruptions/`
 - `GET /api/purchase-order-lines/` lists normalized order lines. Create or replace lines through the nested `lines` array on a purchase order; an omitted line number is assigned from its position. Existing line IDs and received quantities are retained when a line number is reused.
-- `POST /api/inventory-movements/` records a receipt, issue, or adjustment and atomically updates that inventory balance. Receipts need a positive `quantity_delta`, issues a negative one, and adjustments may be positive or negative. A movement that would make stock negative is rejected.
+- `POST /api/inventory-movements/` records a receipt, issue, or adjustment and atomically updates that inventory balance. Receipts need a positive `quantity_delta`, issues a negative one, and adjustments may be positive or negative. A movement that would make stock negative is rejected. The movement includes `occurred_at` (business date); a receipt may link to a purchase order.
 - `GET /api/audit-events/` lists before/after snapshots for direct API create, update, and delete operations. It is read-only through the API.
 - Inventory accepts either a `warehouse` ID or the legacy `location` label. Location-only requests continue to work and receive a stable generated warehouse record.
 - `GET /api/overview/` for dashboard totals and open disruptions
@@ -118,6 +138,6 @@ The API enforces authentication and approver permissions for the response review
 
 ## Data onboarding
 
-See [the import guide](../docs/data-imports.md) for supported columns, natural keys, import order, duplicate policies, blank-cell behavior, and API details. Imports are supported for suppliers, materials, warehouses, inventory balances, purchase orders, shipments, and disruptions. GDACS source events become advisory disruptions and retain provider attribution and source timestamps. They do not prove that a particular supplier, carrier, facility, or route is affected.
+See [the import guide](../docs/data-imports.md) for supported columns, natural keys, import order, duplicate policies, blank-cell behavior, and API details. Imports are supported for suppliers, materials, warehouses, inventory balances, dated inventory movements, purchase orders, shipments, and disruptions. Historical movements preserve issue and receipt event dates without modifying today's balance; linked receipt records can inform lead-time estimates. GDACS source events become advisory disruptions and retain provider attribution and source timestamps. They do not prove that a particular supplier, carrier, facility, or route is affected.
 
-The deterministic disruption rules combine severity and confidence with linked supplier, shipment, order, material, inventory, region, and source-freshness evidence. Shipment-delay probabilities are a separate experimental model based only on verified actual delivery dates; the demo data does not contain verified training labels. From this directory, run `python manage.py evaluate_risk` to see the disruption-rule scenarios and target bands. See the [risk guide](../docs/risk-intelligence.md) for training requirements, verification, prediction limits, weights, and alert behavior; rule scenarios are not an empirical prediction-quality benchmark.
+The deterministic disruption rules combine severity and confidence with linked supplier, shipment, order, material, inventory, region, and source-freshness evidence. Shipment-delay estimates are a separate experimental model based only on verified actual delivery dates. Demand forecasts are trained from dated issue movements. The demo seed does not contain fabricated labels or consumption history, so prediction endpoints can report that more data is needed. From this directory, run `python manage.py evaluate_risk` to see the disruption-rule scenarios and target bands. See the [risk guide](../docs/risk-intelligence.md) and [demand guide](../docs/demand-forecasting.md) for data requirements and limits; rule scenarios are not an empirical prediction-quality benchmark.
