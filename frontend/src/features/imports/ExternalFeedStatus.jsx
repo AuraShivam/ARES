@@ -28,7 +28,7 @@ export default function ExternalFeedStatus({ source }) {
       <div>
         <p className="eyebrow">EXTERNAL DATA SOURCE</p>
         <h3 id="feed-status-heading">{source.name}</h3>
-        <p className="feed-status-description">Recent global disaster alerts are normalized into advisory ARES disruption records.</p>
+        <p className="feed-status-description">Recent global disaster alerts from the GDACS GeoJSON API are normalized into advisory ARES disruption records.</p>
       </div>
       <span className={`feed-status-badge ${statusClass}`}><i />{status}</span>
     </div>

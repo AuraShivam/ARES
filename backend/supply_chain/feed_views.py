@@ -2,7 +2,7 @@ from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .gdacs_feed import FEED_KEY, FEED_NAME, FeedConfigurationError, feed_configuration
+from .gdacs_feed import FEED_KEY, FEED_NAME, GDACS_API_URL, GDACS_EVENT_CODES, FeedConfigurationError, feed_configuration
 from .models import ExternalFeed
 
 
@@ -12,7 +12,13 @@ def feed_status(request):
     try:
         configuration = feed_configuration()
     except FeedConfigurationError as exc:
-        configuration = {"poll_interval_seconds": 360, "minimum_alert_level": "orange"}
+        configuration = {
+            "endpoint": GDACS_API_URL,
+            "format": "GeoJSON FeatureCollection",
+            "event_types": list(GDACS_EVENT_CODES),
+            "poll_interval_seconds": 360,
+            "minimum_alert_level": "orange",
+        }
         configuration_error = str(exc)
 
     feed = ExternalFeed.objects.filter(key=FEED_KEY).first()
@@ -27,6 +33,9 @@ def feed_status(request):
             "key": FEED_KEY,
             "name": FEED_NAME,
             "provider": "Global Disaster Alert and Coordination System (GDACS)",
+            "endpoint": configuration["endpoint"],
+            "format": configuration["format"],
+            "event_types": configuration["event_types"],
             "enabled": not bool(configuration_error),
             "status": status,
             "minimum_alert_level": configuration["minimum_alert_level"],

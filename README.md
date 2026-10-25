@@ -44,7 +44,7 @@ Risk rules and both ML models provide **advisory** results. Shipment predictions
 
 ## Run the local demonstration
 
-The recommended demo runs on `http://localhost:8080` using Docker Compose, with PostgreSQL and Redis isolated in the local Compose network. Follow the [deployment and operations guide](docs/deployment.md) for Docker Desktop setup, local configuration, administrator creation, demo data, and safe shutdown. The demo is loopback-only; GitHub Pages cannot run the Django API, workers, or PostgreSQL database.
+The recommended demo runs on `http://localhost:8080` using Docker Compose, with PostgreSQL and Redis isolated in the local Compose network. Follow the [deployment and operations guide](docs/operations/deployment.md) for Docker Desktop setup, local configuration, administrator creation, demo data, and safe shutdown. The demo is loopback-only; GitHub Pages cannot run the Django API, workers, or PostgreSQL database.
 
 ## Repository map
 
@@ -52,20 +52,28 @@ The recommended demo runs on `http://localhost:8080` using Docker Compose, with 
 .
 ├── backend/                 Django REST API, data models, migrations, workers, and ML logic
 ├── frontend/                React + Vite dashboard
-├── docs/                    Architecture, features, setup, security, and operations guides
-├── ops/                      PostgreSQL backup and guarded restore scripts
+├── docs/
+│   ├── engineering/          Architecture, security, and testing guides
+│   ├── operations/           Local demo, deployment, and roadmap guides
+│   ├── product/              Feature and data onboarding guides
+│   └── references/           Historical project documents (local PDFs ignored by Git)
+├── ops/                     PostgreSQL backup and guarded restore scripts
 ├── compose.demo.yaml         Local demonstration runtime
 └── compose.production.yaml   Provider-neutral hosted runtime example
 ```
 
+The ignored `.local/archive/legacy-sap-purchase-order-project/` folder preserves old local SQLite-era files. It is not used by the PostgreSQL-backed ARES app and is not part of the Git repository.
+
 ## Guides
 
-- [Architecture and request flow](docs/architecture.md)
+- [Architecture and request flow](docs/engineering/architecture.md)
 - [Backend setup and API reference](backend/README.md)
-- [Shipment and disruption risk intelligence](docs/risk-intelligence.md)
-- [Demand forecasting and inventory planning](docs/demand-forecasting.md)
-- [CSV imports and external data](docs/data-imports.md)
-- [Response plans and approvals](docs/response-plans.md)
-- [Security and quality](docs/security-quality.md)
-- [Deployment, backups, and recovery](docs/deployment.md)
-- [Project roadmap and current phase status](docs/roadmap.md)
+- [Shipment and disruption risk intelligence](docs/product/risk-intelligence.md)
+- [Demand forecasting and inventory planning](docs/product/demand-forecasting.md)
+- [CSV imports and external data](docs/product/data-imports.md)
+- [Response plans and approvals](docs/product/response-plans.md)
+- [Security and quality](docs/engineering/security-quality.md)
+- [Testing guide](docs/engineering/testing.md)
+- [Deployment, backups, and recovery](docs/operations/deployment.md)
+- [Project roadmap and current phase status](docs/operations/roadmap.md)
+- [Historical reference documents](docs/references/README.md)

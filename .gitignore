@@ -24,3 +24,7 @@ backups/
 
 # Supplied reference PDFs stay in the workspace but out of source history.
 /*.pdf
+/docs/references/*.pdf
+
+# Local-only legacy artifacts and archives
+/.local/

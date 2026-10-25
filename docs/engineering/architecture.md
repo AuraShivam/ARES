@@ -54,7 +54,7 @@ The authenticated dashboard opens a same-origin WebSocket at `/ws/events/` and a
 
 PostgreSQL is ARES's system of record. `backend/config/settings.py` reads connection settings from `POSTGRES_*` environment variables. Local credentials belong in the ignored `backend/.env`; `.env.example` contains blank credential fields.
 
-The MVP receives data through its APIs, dashboard workflows, the demo seed command, validated CSV imports for all domain records, and a scheduled connector for the public GDACS global disaster feed. CSV previews record batch and row provenance; commits revalidate data and apply the whole batch in one transaction. The GDACS connector normalizes significant recent alerts, deduplicates source events, retries temporary upstream failures, updates source freshness, and exposes sync health. Run `python manage.py sync_gdacs_alerts --watch` from `backend/` to poll at the configured interval. The provider's recent-events feed is global and refreshed about every six minutes; it is disaster-alert data, not supplier/carrier telemetry. The dashboard also supports CSV export.
+The MVP receives data through its APIs, dashboard workflows, the demo seed command, validated CSV imports for all domain records, and a scheduled connector for the public GDACS current-events GeoJSON API. CSV previews record batch and row provenance; commits revalidate data and apply the whole batch in one transaction. The GDACS connector fetches paginated events, normalizes significant alerts, deduplicates source events, retries temporary upstream failures, updates source freshness, and exposes sync health. Run `python manage.py sync_gdacs_alerts --watch` from `backend/` to poll at the configured interval. GDACS data is disaster-alert context, not supplier/carrier telemetry. The dashboard also supports CSV export.
 
 ## Current API surface
 
@@ -63,12 +63,12 @@ The MVP receives data through its APIs, dashboard workflows, the demo seed comma
 - Access: authenticated API tokens for the dashboard, with the `ares_approvers` group or Django staff status required for approval decisions; `/api/health/` and login are the only public API routes.
 - Summary and health: `GET /api/overview/`, `GET /api/health/`.
 - Risk assessment: `POST /api/risk/assess/`.
-- Risk rules and representative-scenario evaluation: [risk intelligence guide](risk-intelligence.md); run `python manage.py evaluate_risk` from `backend/`.
+- Risk rules and representative-scenario evaluation: [risk intelligence guide](../product/risk-intelligence.md); run `python manage.py evaluate_risk` from `backend/`.
 - CSV onboarding: `GET /api/imports/templates/`, `GET /api/imports/`, `POST /api/imports/preview/`, and `POST /api/imports/<uuid>/commit/`.
 - External feed status: authenticated `GET /api/feeds/status/`.
 - The dashboard API base defaults to `http://127.0.0.1:8000/api`; set `VITE_API_BASE_URL` to use another API address.
 
-See [backend/README.md](../backend/README.md) for setup and endpoint details.
+See [backend/README.md](../../backend/README.md) for setup and endpoint details.
 
 ## Design boundaries
 
