@@ -54,11 +54,12 @@ The authenticated dashboard opens a same-origin WebSocket at `/ws/events/` and a
 
 PostgreSQL is ARES's system of record. `backend/config/settings.py` reads connection settings from `POSTGRES_*` environment variables. Local credentials belong in the ignored `backend/.env`; `.env.example` contains blank credential fields.
 
-The MVP receives data through its APIs, dashboard workflows, the demo seed command, validated CSV imports for all domain records, and a scheduled connector for the public GDACS current-events GeoJSON API. CSV previews record batch and row provenance; commits revalidate data and apply the whole batch in one transaction. The GDACS connector fetches paginated events, normalizes significant alerts, deduplicates source events, retries temporary upstream failures, updates source freshness, and exposes sync health. Run `python manage.py sync_gdacs_alerts --watch` from `backend/` to poll at the configured interval. GDACS data is disaster-alert context, not supplier/carrier telemetry. The dashboard also supports CSV export.
+The MVP receives data through its APIs, dashboard workflows, the demo seed command, validated CSV imports for all domain records, and a scheduled connector for the public GDACS current-events GeoJSON API. CSV previews record batch and row provenance; commits revalidate data and apply the whole batch in one transaction. The GDACS connector reads the API's bounded recent-events collection, normalizes significant alerts, deduplicates source events, retries temporary upstream failures, updates source freshness, and exposes sync health. Run `python manage.py sync_gdacs_alerts --watch` from `backend/` to poll at the configured interval. GDACS data is disaster-alert context, not supplier/carrier telemetry. The dashboard also supports CSV export.
 
 ## Current API surface
 
 - CRUD resources: suppliers, materials, warehouses, inventory, inventory movements, purchase orders, purchase-order lines, shipments, disruptions, and audit events.
+- `GET /api/map/data/` provides shipment endpoints with coordinates and active GDACS feed-event points for the authenticated world map.
 - Response workflow: `/api/response-plans/` and `/api/response-actions/`; plan changes and review transitions are written to audit history.
 - Access: authenticated API tokens for the dashboard, with the `ares_approvers` group or Django staff status required for approval decisions; `/api/health/` and login are the only public API routes.
 - Summary and health: `GET /api/overview/`, `GET /api/health/`.

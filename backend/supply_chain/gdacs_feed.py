@@ -11,7 +11,6 @@ from datetime import timedelta, timezone as datetime_timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import certifi
@@ -30,8 +29,6 @@ GDACS_API_URL = "https://www.gdacs.org/gdacsapi/api/Events/geteventlist/events4a
 MIN_POLL_INTERVAL_SECONDS = 360
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024
 MAX_RETRIES = 3
-API_PAGE_SIZE = 100
-MAX_API_PAGES = 20
 
 ALERT_LEVELS = {"green": 1, "orange": 2, "red": 3}
 SEVERITY_MAP = {"green": "low", "orange": "high", "red": "critical"}
@@ -110,10 +107,9 @@ def _retry_after_seconds(value):
             return None
 
 
-def _fetch_api_page(page_number):
-    query = urlencode({"pagenumber": page_number, "pagesize": API_PAGE_SIZE})
+def _fetch_api_page():
     request = Request(
-        f"{GDACS_API_URL}?{query}",
+        GDACS_API_URL,
         headers={
             "Accept": "application/geo+json, application/json;q=0.9",
             "User-Agent": _user_agent(),
@@ -161,25 +157,16 @@ def _feature_key(feature):
 
 
 def _fetch_feed_items():
-    """Fetch all pages from GDACS's current-events GeoJSON API collection."""
+    """Fetch the bounded recent-event collection provided by GDACS for its app."""
     items = []
     seen_keys = set()
-    for page_number in range(1, MAX_API_PAGES + 1):
-        page = _fetch_api_page(page_number)
-        if not page:
-            break
-        for feature in page:
-            key = _feature_key(feature)
-            if key and key in seen_keys:
-                continue
-            if key:
-                seen_keys.add(key)
-            items.append(feature)
-        if len(page) < API_PAGE_SIZE:
-            break
-    else:
-        if len(page) == API_PAGE_SIZE:
-            raise RuntimeError(f"GDACS API returned more than {MAX_API_PAGES * API_PAGE_SIZE} events; refusing an incomplete sync.")
+    for feature in _fetch_api_page():
+        key = _feature_key(feature)
+        if key and key in seen_keys:
+            continue
+        if key:
+            seen_keys.add(key)
+        items.append(feature)
     return items
 
 
@@ -511,7 +498,12 @@ def sync_gdacs_alerts():
         feed = ExternalFeed.objects.select_for_update().get(pk=feed.pk)
         feed.name = FEED_NAME
         feed.enabled = True
-        if feed.last_attempt_at and now - feed.last_attempt_at < timedelta(seconds=configuration["poll_interval_seconds"]):
+        retry_after_failure = feed.status == "failed"
+        if (
+            not retry_after_failure
+            and feed.last_attempt_at
+            and now - feed.last_attempt_at < timedelta(seconds=configuration["poll_interval_seconds"])
+        ):
             return {
                 "status": "skipped",
                 "message": "The feed was polled recently; the configured minimum interval has not elapsed.",

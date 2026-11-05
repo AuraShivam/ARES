@@ -309,6 +309,17 @@ class ShipmentSerializer(serializers.ModelSerializer):
             "delivery_outcome_verified_by", "delivery_outcome_evidence",
         )
 
+    def validate(self, attrs):
+        for latitude, longitude in (
+            ("origin_latitude", "origin_longitude"),
+            ("destination_latitude", "destination_longitude"),
+        ):
+            lat = attrs.get(latitude, getattr(self.instance, latitude, None) if self.instance else None)
+            lon = attrs.get(longitude, getattr(self.instance, longitude, None) if self.instance else None)
+            if (lat is None) != (lon is None):
+                raise serializers.ValidationError({latitude: f"Provide {latitude} and {longitude} together."})
+        return attrs
+
     def update(self, instance, validated_data):
         # If a verified shipment's model inputs change, require a fresh outcome review.
         feature_fields = ("purchase_order", "eta", "carrier", "origin", "destination", "status")

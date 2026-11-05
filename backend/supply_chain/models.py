@@ -182,6 +182,10 @@ class Shipment(SourceTrackedModel):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="shipments")
     origin = models.CharField(max_length=120)
     destination = models.CharField(max_length=120)
+    origin_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    origin_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
+    destination_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    destination_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
     carrier = models.CharField(max_length=120, blank=True)
     eta = models.DateField(null=True, blank=True)
     actual_delivery_date = models.DateField(null=True, blank=True)
@@ -198,6 +202,22 @@ class Shipment(SourceTrackedModel):
             models.Index(
                 fields=["delivery_outcome_verified", "status", "eta"],
                 name="verified_delivery_risk_idx",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(origin_latitude__isnull=True, origin_longitude__isnull=True)
+                    | Q(origin_latitude__isnull=False, origin_longitude__isnull=False)
+                ),
+                name="shipment_origin_coord_pair",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(destination_latitude__isnull=True, destination_longitude__isnull=True)
+                    | Q(destination_latitude__isnull=False, destination_longitude__isnull=False)
+                ),
+                name="shipment_destination_coord_pair",
             ),
         ]
 

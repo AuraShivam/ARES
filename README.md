@@ -8,6 +8,7 @@ ARES is a standalone project. It does not require SAP or a direct connection to 
 
 - **Maintains supply-chain records:** suppliers, materials, warehouses, inventory balances and movements, purchase orders and lines, shipments, and disruptions.
 - **Shows operational status:** the overview summarizes inventory, shipments, active alerts, and open disruptions. Searchable record pages support sorting and CSV export.
+- **Maps network activity:** the World map plots shipment routes when endpoint coordinates are supplied and shows active GDACS alerts with source-provided map coordinates.
 - **Assesses disruption risk:** an explainable rules engine combines event severity and confidence with linked supplier, shipment, order, material, inventory, region, and source-freshness evidence. ARES saves assessment history, opens threshold alerts, and reassesses relevant changes.
 - **Forecasts shipment delays:** an experimental scikit-learn model trains from completed shipments whose actual dates were verified by an ARES approver. It can report late-delivery probability, delay estimates, supplier trends, and stock-cover context when sufficient verified examples exist.
 - **Plans material demand:** an experimental per-material model forecasts demand over 7, 30, and 90 days from dated inventory issue history. It estimates stockout timing, safety stock, and a suggested reorder quantity while accounting for dated open purchase orders. Forecasts are withheld unless that material has at least 60 days of movement history and 10 distinct consumption dates.
@@ -34,6 +35,7 @@ Risk rules and both ML models provide **advisory** results. Shipment predictions
 | Section | Purpose |
 | --- | --- |
 | Network overview | Snapshot of operational records, low stock, shipments, disruptions, and active risk alerts |
+| World map | Coordinate-enabled shipment routes and current GDACS disaster alerts |
 | Risk intelligence | Explainable disruption assessments and alerts, outcome calibration, and shipment-delay outlook |
 | Disruptions and response plans | Record disruption events, assign mitigation work, submit plans for approval, and track actions |
 | Shipments and purchase orders | Review delivery commitments, supplier links, purchase-order lines, and shipment status |

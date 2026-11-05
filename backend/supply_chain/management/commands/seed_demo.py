@@ -35,7 +35,10 @@ class Command(BaseCommand):
         PurchaseOrderLine.objects.update_or_create(purchase_order=po2, line_number=1, defaults={
             "material": resin, "quantity": Decimal("400"), "received_quantity": Decimal("0"), "unit_price": Decimal("8.75")})
         ship, _ = Shipment.objects.update_or_create(reference="SHP-7781", defaults={
-            "purchase_order": po2, "origin": "Kaohsiung", "destination": "Singapore Hub", "carrier": "OceanBridge", "eta": date.today() + timedelta(days=19), "status": "delayed", "risk_score": 74})
+            "purchase_order": po2, "origin": "Kaohsiung", "destination": "Singapore Hub",
+            "origin_latitude": Decimal("22.6273"), "origin_longitude": Decimal("120.3014"),
+            "destination_latitude": Decimal("1.3521"), "destination_longitude": Decimal("103.8198"),
+            "carrier": "OceanBridge", "eta": date.today() + timedelta(days=19), "status": "delayed", "risk_score": 74})
         Disruption.objects.update_or_create(title="Port congestion in East Asia", defaults={
             "disruption_type": "logistics", "description": "Port congestion is extending transit times on the Pacific route.", "affected_region": "East Asia", "severity": "high", "status": "open", "confidence": 82, "affected_supplier": pacific, "affected_shipment": ship})
         self.stdout.write(self.style.SUCCESS("Demo supply-chain data is ready."))

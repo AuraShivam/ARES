@@ -1,9 +1,11 @@
 import json
 import logging
+from urllib.parse import urlsplit
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import connection, transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.db.utils import DatabaseError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -14,7 +16,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .models import (
-    AuditEvent, Disruption, Inventory, InventoryMovement, Material, PurchaseOrder,
+    AuditEvent, Disruption, ExternalFeed, ExternalFeedEvent, Inventory, InventoryMovement, Material, PurchaseOrder,
     NotificationDelivery, PurchaseOrderLine, ResponseAction, ResponsePlan,
     ResponseActionExecution, RiskAlert, RiskAssessmentSnapshot, RiskOutcome,
     Shipment, Supplier, Warehouse,
@@ -37,8 +39,11 @@ from .serializers import (
     ShipmentSerializer, SupplierSerializer, WarehouseSerializer,
 )
 from .permissions import IsSupplyChainApprover
+from .gdacs_feed import FEED_KEY
 
 logger = logging.getLogger("ares.api")
+MAX_MAP_SHIPMENTS = 2000
+MAX_MAP_EVENTS = 500
 
 
 def _reviewer_identity(user):
@@ -406,6 +411,104 @@ def overview(request):
         "at_risk_shipments": Shipment.objects.filter(status__in=["delayed", "at_risk"]).count(),
         "active_risk_alerts": RiskAlert.objects.filter(status="active").count(),
     })
+
+
+@api_view(["GET"])
+def map_data(request):
+    """Return shipment coordinates and current located GDACS events for the network map."""
+    shipment_query = Shipment.objects.select_related("purchase_order").order_by("eta", "reference")
+    shipment_total = shipment_query.count()
+    shipment_rows = list(shipment_query[:MAX_MAP_SHIPMENTS])
+    shipments = [{
+        "id": str(shipment.pk),
+        "reference": shipment.reference,
+        "origin": shipment.origin,
+        "destination": shipment.destination,
+        "origin_latitude": float(shipment.origin_latitude) if shipment.origin_latitude is not None else None,
+        "origin_longitude": float(shipment.origin_longitude) if shipment.origin_longitude is not None else None,
+        "destination_latitude": float(shipment.destination_latitude) if shipment.destination_latitude is not None else None,
+        "destination_longitude": float(shipment.destination_longitude) if shipment.destination_longitude is not None else None,
+        "carrier": shipment.carrier,
+        "eta": shipment.eta,
+        "status": shipment.status,
+        "risk_score": shipment.risk_score,
+    } for shipment in shipment_rows]
+
+    now = timezone.now()
+    event_query = ExternalFeedEvent.objects.filter(
+        feed__key=FEED_KEY,
+        lifecycle="active",
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gte=now),
+    ).order_by("-issued_at", "-created_at")
+    event_total = event_query.count()
+    event_rows = list(event_query[:MAX_MAP_EVENTS])
+    disasters = []
+    for event in event_rows:
+        payload = event.payload if isinstance(event.payload, dict) else {}
+        alert_level = str(payload.get("alert_level", "")).casefold()
+        if alert_level not in {"green", "orange", "red"}:
+            alert_level = {"low": "green", "high": "orange", "critical": "red"}.get(event.severity, "green")
+        point = payload.get("point")
+        latitude = longitude = None
+        if isinstance(point, str) and "," in point:
+            try:
+                latitude_text, longitude_text = point.split(",", 1)
+                latitude, longitude = float(latitude_text), float(longitude_text)
+                if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+                    latitude = longitude = None
+            except (TypeError, ValueError):
+                latitude = longitude = None
+        disasters.append({
+            "id": str(event.pk),
+            "title": event.title,
+            "event_type": event.event_type,
+            "alert_level": alert_level,
+            "affected_region": event.affected_region,
+            "issued_at": event.issued_at,
+            "expires_at": event.expires_at,
+            "latitude": latitude,
+            "longitude": longitude,
+            "source_url": _safe_gdacs_url(payload.get("link", "")),
+        })
+
+    feed = ExternalFeed.objects.filter(key=FEED_KEY).first()
+    return Response({
+        "generated_at": now,
+        "shipments": shipments,
+        "disasters": disasters,
+        "feed": {
+            "status": feed.status if feed else "never",
+            "last_success_at": feed.last_success_at if feed else None,
+            "last_error": feed.last_error if feed else "",
+        },
+        "counts": {
+            "shipments_total": shipment_total,
+            "shipments_returned": len(shipments),
+            "shipments_truncated": shipment_total > MAX_MAP_SHIPMENTS,
+            "shipments_with_coordinates": sum(
+                shipment["origin_latitude"] is not None or shipment["destination_latitude"] is not None
+                for shipment in shipments
+            ),
+            "disasters_total": event_total,
+            "disasters_returned": len(disasters),
+            "disasters_truncated": event_total > MAX_MAP_EVENTS,
+            "disasters_with_coordinates": sum(event["latitude"] is not None for event in disasters),
+        },
+    })
+
+
+def _safe_gdacs_url(value):
+    if not isinstance(value, str):
+        return ""
+    try:
+        parsed = urlsplit(value)
+        hostname = (parsed.hostname or "").casefold()
+        if parsed.scheme.casefold() != "https" or not (hostname == "gdacs.org" or hostname.endswith(".gdacs.org")):
+            return ""
+        return value
+    except ValueError:
+        return ""
 
 
 @api_view(["POST"])

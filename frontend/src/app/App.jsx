@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NAV_GROUPS, SECTIONS, TABLE_COLUMNS } from '../config/navigation.js'
 import { clearAccessToken, eventsWebSocketUrl, getAccessToken, request, setAccessToken, setUnauthorizedHandler } from '../lib/api.js'
 import { formatRelativeTime, rowsFrom } from '../lib/format.js'
@@ -14,6 +14,7 @@ import RiskIntelligencePage from '../features/risk/RiskIntelligencePage.jsx'
 import DemandPlanningPage from '../features/inventory/DemandPlanningPage.jsx'
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 30_000
+const NetworkMapPage = lazy(() => import('../features/map/NetworkMapPage.jsx'))
 
 function App() {
   const [auth, setAuth] = useState(null)
@@ -27,6 +28,7 @@ function App() {
   const [feedStatus, setFeedStatus] = useState(null)
   const [riskData, setRiskData] = useState({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
   const [demandData, setDemandData] = useState(null)
+  const [mapData, setMapData] = useState(null)
   const [records, setRecords] = useState([])
   const [homeData, setHomeData] = useState({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
   const [loading, setLoading] = useState(true)
@@ -54,6 +56,7 @@ function App() {
       setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
       setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
       setDemandData(null)
+      setMapData(null)
       setLastUpdated(null)
       setRefreshState('connecting')
       setModal('')
@@ -120,6 +123,10 @@ function App() {
         setFeedStatus(null)
       } else if (section === 'demand-planning') {
         setDemandData(await request('/inventory/forecast/', { signal }))
+        setRecords([])
+        setFeedStatus(null)
+      } else if (section === 'network-map') {
+        setMapData(await request('/map/data/', { signal }))
         setRecords([])
         setFeedStatus(null)
       } else {
@@ -422,6 +429,7 @@ function App() {
     setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
     setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
     setDemandData(null)
+    setMapData(null)
     setLastUpdated(null)
     setRefreshState('connecting')
   }
@@ -591,6 +599,8 @@ function App() {
               ? <RiskIntelligencePage data={riskData} loading={loading} canReview={Boolean(auth.is_approver)} onSubmitOutcome={saveRiskOutcome} onVerifyDelivery={verifyShipmentDelivery} savingId={busyId} />
             : section === 'demand-planning'
               ? <DemandPlanningPage data={demandData} loading={loading} />
+            : section === 'network-map'
+              ? <Suspense fallback={<LoadingState />}><NetworkMapPage data={mapData} loading={loading} onNavigate={navigate} /></Suspense>
             : <section className="panel records-panel">
               <div className="records-heading">
                 <div><h2>{current.title}</h2><p>{records.length} {records.length === 1 ? 'record' : 'records'} in the local dataset</p></div>

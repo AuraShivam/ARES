@@ -59,7 +59,11 @@ IMPORT_SCHEMAS = {
     "shipment": {
         "label": "Shipments",
         "required": ["reference", "purchase_order_number", "origin", "destination"],
-        "optional": ["carrier", "eta", "actual_delivery_date", "status", "risk_score", "source_key", "source_updated_at"],
+        "optional": [
+            "carrier", "eta", "actual_delivery_date", "status", "risk_score",
+            "origin_latitude", "origin_longitude", "destination_latitude", "destination_longitude",
+            "source_key", "source_updated_at",
+        ],
         "key": "reference",
     },
     "disruption": {
@@ -357,6 +361,11 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         _set_reference(candidate, row, "purchase_order_number", "purchase_order", PurchaseOrder, "number", errors, required=True)
         _set_value(candidate, row, "origin", "origin", errors, required=True)
         _set_value(candidate, row, "destination", "destination", errors, required=True)
+        for coordinate in ("origin_latitude", "origin_longitude", "destination_latitude", "destination_longitude"):
+            _set_value(candidate, row, coordinate, coordinate, errors, _parse_decimal)
+        for latitude, longitude in (("origin_latitude", "origin_longitude"), ("destination_latitude", "destination_longitude")):
+            if (getattr(candidate, latitude) is None) != (getattr(candidate, longitude) is None):
+                errors.append(f"{latitude} and {longitude} must be provided together.")
         _set_value(candidate, row, "carrier", "carrier", errors)
         _set_value(candidate, row, "eta", "eta", errors, _parse_date)
         _set_value(candidate, row, "actual_delivery_date", "actual_delivery_date", errors, _parse_date)
