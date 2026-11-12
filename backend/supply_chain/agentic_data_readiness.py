@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from .demand_forecast import MIN_HISTORY_DAYS, MIN_ISSUE_DAYS, LOOKBACK_DAYS
 from .gdacs_feed import FEED_KEY
+from .agents.providers import provider_readiness
 from .models import (
     Disruption,
     ExternalFeed,
@@ -132,6 +133,8 @@ def build_agent_data_readiness(today=None):
     supplier_available = suppliers > 0
     logistics_available = shipments > 0
     procurement_available = open_purchase_orders > 0
+    provider = provider_readiness()
+    agent_runtime_configured = provider["status"] == "configured"
 
     return {
         "generated_at": timezone.now(),
@@ -249,10 +252,17 @@ def build_agent_data_readiness(today=None):
                 "limitations": ["A GDACS alert or geographic proximity is contextual evidence and does not prove operational impact."],
             },
             "agent_runtime": {
-                "status": "not_implemented",
-                "implementation": "phase_2",
-                "evidence": {},
-                "limitations": ["No agent workflow has run; this report describes data readiness only."],
+                "status": "configured" if agent_runtime_configured else "unavailable",
+                "implementation": "single_agent_runtime_available",
+                "evidence": {
+                    "provider": provider["provider"],
+                    "model": provider["model"],
+                    "missing_configuration": provider["missing_configuration"],
+                },
+                "limitations": [
+                    "Configuration status does not verify provider network reachability." if agent_runtime_configured else "The runtime will not execute until provider configuration and external-processing opt-in are complete.",
+                    "Specialist workflows and multi-agent orchestration are Phase 3 work.",
+                ],
             },
         },
         "data_quality": {

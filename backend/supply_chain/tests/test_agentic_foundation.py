@@ -22,7 +22,7 @@ class AgentDataReadinessApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["as_of_date"], timezone.localdate().isoformat())
         self.assertIn("shipment_delay_prediction", response.data["capabilities"])
-        self.assertEqual(response.data["capabilities"]["agent_runtime"]["status"], "not_implemented")
+        self.assertEqual(response.data["capabilities"]["agent_runtime"]["status"], "unavailable")
         self.assertIn("data_model_gaps", response.data)
 
     def test_readiness_endpoint_rejects_writes(self):

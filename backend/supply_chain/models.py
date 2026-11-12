@@ -596,3 +596,58 @@ class DigitalTwinSimulation(TimestampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class AgentExecution(TimestampedModel):
+    """Auditable metadata and validated output for one bounded AI invocation."""
+
+    AGENT_IDS = [
+        ("risk_intelligence", "Risk intelligence"),
+        ("supplier_intelligence", "Supplier intelligence"),
+        ("inventory_intelligence", "Inventory intelligence"),
+        ("logistics_intelligence", "Logistics intelligence"),
+        ("procurement_intelligence", "Procurement intelligence"),
+        ("coordinator", "Coordinator"),
+    ]
+    STATUSES = [
+        ("running", "Running"),
+        ("succeeded", "Succeeded"),
+        ("partial", "Partial"),
+        ("failed", "Failed"),
+    ]
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ares_agent_executions",
+    )
+    agent_id = models.CharField(max_length=40, choices=AGENT_IDS)
+    idempotency_key = models.CharField(max_length=128)
+    request_hash = models.CharField(max_length=64)
+    status = models.CharField(max_length=12, choices=STATUSES, default="running")
+    input_references = models.JSONField(default=list, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    provider = models.CharField(max_length=40, blank=True)
+    model_name = models.CharField(max_length=120, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    tool_call_count = models.PositiveSmallIntegerField(default=0)
+    input_tokens = models.PositiveIntegerField(null=True, blank=True)
+    output_tokens = models.PositiveIntegerField(null=True, blank=True)
+    error_code = models.CharField(max_length=80, blank=True)
+    error_message = models.CharField(max_length=500, blank=True)
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [models.UniqueConstraint(
+            fields=["requested_by", "idempotency_key"],
+            name="uniq_agent_exec_user_idem",
+        )]
+        indexes = [
+            models.Index(fields=["requested_by", "created_at"], name="agent_exec_user_date_idx"),
+            models.Index(fields=["agent_id", "status"], name="agent_exec_type_status_idx"),
+        ]

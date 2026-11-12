@@ -4,7 +4,10 @@ from rest_framework.routers import DefaultRouter
 from supply_chain.import_views import import_commit, import_detail, import_preview, import_templates, imports_list
 from supply_chain.auth_views import current_user, login, logout
 from supply_chain.feed_views import feed_status
-from supply_chain.agents.api import data_readiness as agent_data_readiness
+from supply_chain.agents.api import (
+    agent_execution_detail, agent_executions, agent_status, agent_tools,
+    data_readiness as agent_data_readiness,
+)
 from supply_chain.digital_twin import api as digital_twin_api
 from supply_chain.views import (
     AuditEventViewSet, DisruptionViewSet, InventoryMovementViewSet, InventoryViewSet,
@@ -38,7 +41,11 @@ urlpatterns = [
     path("api/auth/me/", current_user, name="api-current-user"),
     path("api/auth/logout/", logout, name="api-logout"),
     path("api/inventory/forecast/", inventory_forecast, name="inventory-forecast"),
+    path("api/ai/status/", agent_status, name="ai-status"),
     path("api/ai/data-readiness/", agent_data_readiness, name="ai-data-readiness"),
+    path("api/ai/tools/", agent_tools, name="ai-tools"),
+    path("api/ai/executions/", agent_executions, name="ai-executions"),
+    path("api/ai/executions/<uuid:execution_id>/", agent_execution_detail, name="ai-execution-detail"),
     path("api/map/data/", map_data, name="map-data"),
     path("api/digital-twin/graph/", digital_twin_api.graph_snapshot, name="digital-twin-graph"),
     path("api/digital-twin/nodes/", digital_twin_api.graph_nodes, name="digital-twin-nodes"),

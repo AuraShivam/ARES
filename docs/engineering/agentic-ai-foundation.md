@@ -1,6 +1,6 @@
 # Agentic AI foundation
 
-## Phase 1 scope
+## Phase 1: readiness and contracts
 
 Phase 1 establishes shared output contracts and a read-only data-readiness report. It does not run an agent, call an LLM, train a new model, or write operational records. That keeps an empty or incomplete dataset from being mistaken for a successful AI analysis.
 
@@ -15,9 +15,10 @@ Capability statuses have these meanings:
 | `ready` | The current implementation's stated minimum input conditions are present. This is not a claim of production accuracy. |
 | `limited` | Some inputs exist, but one or more requirements are missing. |
 | `blocked` | The capability has no usable records for its stated purpose. |
-| `not_implemented` | The execution capability belongs to a later phase and is not available yet. |
+| `unavailable` | A capability or dependency cannot run with the current implementation/configuration. |
+| `configured` | Required provider settings and external-processing opt-in are present; this does not prove provider reachability or health. |
 
-The report exposes separate readiness for deterministic risk assessment, dated-demand forecasting, verified shipment-delay prediction, supplier intelligence, inventory intelligence, logistics, procurement, disaster intelligence, and agent execution. It avoids a single composite score because these capabilities have different evidence requirements.
+The report exposes separate readiness for deterministic risk assessment, dated-demand forecasting, verified shipment-delay prediction, supplier intelligence, inventory intelligence, logistics, procurement, disaster intelligence, and agent execution. Agent-runtime readiness is `unavailable` until a provider is configured and external processing is explicitly enabled; it becomes `configured` when those settings are present. This is configuration status only: the endpoint does not make a provider request. It avoids a single composite score because these capabilities have different evidence requirements.
 
 ### Current data requirements reflected by the report
 
@@ -47,7 +48,7 @@ Top-level result fields:
 | `assumptions`, `confidence`, `uncertainty` | Explicitly surface assumptions and unknowns. Unknown confidence requires an uncertainty explanation. |
 | `errors`, `executed_at`, `model` | Failure details, timestamp, and optional provider/model identity. |
 
-Findings and recommendations require at least one evidence reference. Recommendations default to requiring human approval. A successful result cannot carry execution errors; partial or failed states must be used when applicable. These serializers define a data contract only; they are not an agent runtime.
+Findings and recommendations require at least one evidence reference. Recommendations default to requiring human approval. A successful result cannot carry execution errors; partial or failed states must be used when applicable. Phase 2 uses this contract in a bounded runtime.
 
 Example validated result:
 
@@ -81,6 +82,33 @@ Example validated result:
 }
 ```
 
-## Next phases
+## Phase 2: bounded agent runtime
 
-Phase 2 adds an optional provider abstraction, configuration/status handling, and restricted read-only tools. Phase 3 adds orchestration and specialist-agent workflows. Do not enable write-capable tools before the approval and audit controls are implemented.
+Phase 2 adds an optional provider adapter, configuration/status handling, user-scoped execution records, and restricted read-only tools. The only live adapter currently implemented is the OpenAI Responses API. It uses function calling and strict JSON-schema output; see the [Responses API reference](https://developers.openai.com/api/reference/resources/responses/methods/create) and [function-calling guide](https://developers.openai.com/api/docs/guides/function-calling).
+
+### Endpoints
+
+All routes below require an authenticated ARES user.
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /api/ai/status/` | Provider configuration state, available roles, read-only access mode, and execution limits. Does not probe the provider. |
+| `GET /api/ai/tools/` | Public descriptions of the registered read-only tools. |
+| `GET /api/ai/data-readiness/` | Current operational-data and model-input coverage. |
+| `GET /api/ai/executions/` | The current user's latest 50 execution records. |
+| `POST /api/ai/executions/` | Start one bounded single-agent analysis. Requires an `Idempotency-Key` request header. |
+| `GET /api/ai/executions/<uuid>/` | Read one execution owned by the current user. |
+
+The execution POST body is `{ "agent_id": "risk_intelligence", "question": "..." }`. The agent ID must be one of the six role IDs in the shared contract. A repeated key and identical request returns the original result; reusing a key for a different request returns HTTP 409. Each user is limited to five POST attempts per hour. A request can make at most four read-tool calls and uses bounded retries, a 30-second timeout, and a 1,200-token output cap by default; settings clamp these limits to documented safe ranges.
+
+### Tools, data handling, and limits
+
+The registered tools only read ARES data: data readiness, supplier, material, current inventory, shipment, purchase order, disruption, and the latest stored risk assessment. Role-specific allowlists narrow access further. Tool arguments are validated, results are bounded, and generated evidence references must exactly match references returned by those tools. The runtime rejects unsupported tools, invalid output, and unverified citations. It never changes operational records; every generated recommendation is forced to require human approval.
+
+The runtime is disabled by default. To enable external processing, an operator must set `ARES_AGENT_PROVIDER=openai_responses`, configure `ARES_AGENT_MODEL`, `ARES_AGENT_API_KEY`, and `ARES_AGENT_API_BASE_URL`, and explicitly set `ARES_AGENT_EXTERNAL_PROCESSING_ENABLED=true`. Remote endpoints must use HTTPS; HTTP is accepted only for localhost development. Configuration examples use blank provider fields, and no credentials are included in the repository. The status endpoint does not expose the key or endpoint URL. When enabled, the user's question and selected read-only ARES tool results are sent to the configured external model provider. Execution records store a hash of the idempotency key and request, the validated result, usage metadata, and safe error details; they do not store the raw question.
+
+`configured` means the settings are complete, not that the provider is reachable, the model is available, or the account has quota. No live provider request is made by default. The current runtime is synchronous and single-agent: coordinator role text is not multi-agent orchestration. Specialist workflows, background execution, cancellation, write tools, and automated actions remain later work.
+
+## Next phase
+
+Phase 3 adds actual specialist-agent workflows and coordinator orchestration. Keep provider calls opt-in and write-capable tools disabled until review, approval, and audit controls are implemented.

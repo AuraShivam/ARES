@@ -119,10 +119,18 @@ REST_FRAMEWORK = {
         if DEBUG else ["rest_framework.renderers.JSONRenderer"]
     ),
     "EXCEPTION_HANDLER": "config.api_errors.api_exception_handler",
-    "DEFAULT_THROTTLE_RATES": {"auth_login": "10/hour"},
+    "DEFAULT_THROTTLE_RATES": {"auth_login": "10/hour", "ares_agent_execution": "5/hour"},
 }
 ARES_API_TOKEN_TTL_HOURS = max(1, int(os.getenv("ARES_API_TOKEN_TTL_HOURS", "8")))
 ARES_EMAIL_DELIVERY_ENABLED = os.getenv("ARES_EMAIL_DELIVERY_ENABLED", "false").lower() == "true"
+ARES_AGENT_PROVIDER = os.getenv("ARES_AGENT_PROVIDER", "disabled").strip().lower()
+ARES_AGENT_MODEL = os.getenv("ARES_AGENT_MODEL", "").strip()
+ARES_AGENT_API_KEY = os.getenv("ARES_AGENT_API_KEY", "").strip()
+ARES_AGENT_API_BASE_URL = os.getenv("ARES_AGENT_API_BASE_URL", "").strip()
+ARES_AGENT_EXTERNAL_PROCESSING_ENABLED = os.getenv("ARES_AGENT_EXTERNAL_PROCESSING_ENABLED", "false").lower() == "true"
+ARES_AGENT_TIMEOUT_SECONDS = max(5, min(60, int(os.getenv("ARES_AGENT_TIMEOUT_SECONDS", "30"))))
+ARES_AGENT_MAX_TOOL_CALLS = max(1, min(8, int(os.getenv("ARES_AGENT_MAX_TOOL_CALLS", "4"))))
+ARES_AGENT_MAX_OUTPUT_TOKENS = max(128, min(4000, int(os.getenv("ARES_AGENT_MAX_OUTPUT_TOKENS", "1200"))))
 ARES_ACTION_EXECUTION_ENABLED = os.getenv("ARES_ACTION_EXECUTION_ENABLED", "false").lower() == "true"
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "")

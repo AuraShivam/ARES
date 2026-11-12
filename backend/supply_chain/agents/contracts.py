@@ -1,7 +1,7 @@
-"""Versioned, provider-neutral contracts for future ARES agent executions.
+"""Versioned, provider-neutral contracts for bounded ARES agent executions.
 
-These serializers define and validate messages; they do not execute an agent or
-imply that an LLM provider is configured.
+These serializers validate messages; they do not call a provider or imply that
+one is configured.
 """
 
 from rest_framework import serializers

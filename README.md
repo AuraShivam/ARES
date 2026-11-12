@@ -17,6 +17,7 @@ ARES is a standalone project. It does not require SAP or a direct connection to 
 - **Coordinates disruption work:** users create response plans and assign action items. Plans move through draft, approval, execution, and completion states; approver decisions and changes are audited. Email delivery and live webhook execution require explicit configuration and approval.
 - **Ingests external hazard alerts:** a scheduled GDACS connector imports recent global disaster alerts and reports feed freshness. GDACS reports hazards; it does not confirm that an ARES supplier, route, or facility is affected.
 - **Tracks changes and refreshes the dashboard:** direct API changes are audited. Authenticated WebSocket events tell the browser to refresh its data; 30-second polling is the fallback.
+- **Runs optional AI-assisted analysis:** authenticated, bounded single-agent executions can inspect ARES data through read-only tools and return evidence-checked findings and approval-required recommendations. The provider is disabled by default; explicit configuration is required before questions and selected records can be sent externally. Multi-agent workflows are future work.
 
 ## How it works
 
@@ -81,5 +82,6 @@ The ignored `.local/archive/legacy-sap-purchase-order-project/` folder preserves
 - [Security and quality](docs/engineering/security-quality.md)
 - [Testing guide](docs/engineering/testing.md)
 - [Deployment, backups, and recovery](docs/operations/deployment.md)
+- [Agent runtime, provider setup, and data boundaries](docs/engineering/agentic-ai-foundation.md)
 - [Project roadmap and current phase status](docs/operations/roadmap.md)
 - [Historical reference documents](docs/references/README.md)
