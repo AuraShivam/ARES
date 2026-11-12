@@ -33,6 +33,8 @@ Browser
 | `backend/supply_chain/risk.py` | Explainable deterministic scoring and advisory recommendations |
 | `backend/supply_chain/demand_forecast.py` | Experimental per-material demand forecasts and advisory stock planning |
 | `backend/supply_chain/digital_twin/` | Database-derived graph, GeoJSON, impact propagation, health KPIs, and isolated what-if scenarios |
+| `backend/supply_chain/agents/` | Provider-neutral serializers for future agent execution messages; no agent runtime is active yet |
+| `backend/supply_chain/agentic_data_readiness.py` | Read-only operational-data coverage report used to show prerequisites and missing evidence for AI capabilities |
 | `backend/supply_chain/migrations/` | Versioned database schema changes |
 | `frontend/src/app/` | Dashboard shell, screen state, API orchestration, and user actions |
 | `frontend/src/config/` | Navigation and table field configuration |
@@ -70,6 +72,7 @@ The MVP receives data through its APIs, dashboard workflows, the demo seed comma
 - Risk rules and representative-scenario evaluation: [risk intelligence guide](../product/risk-intelligence.md); run `python manage.py evaluate_risk` from `backend/`.
 - CSV onboarding: `GET /api/imports/templates/`, `GET /api/imports/`, `POST /api/imports/preview/`, and `POST /api/imports/<uuid>/commit/`.
 - External feed status: authenticated `GET /api/feeds/status/`.
+- Agentic foundation: authenticated `GET /api/ai/data-readiness/` reports measured data coverage and limitations; the shared execution contract is documented in the [agentic AI foundation guide](agentic-ai-foundation.md). Phase 1 does not execute agents or call an LLM.
 - The dashboard API base defaults to `http://127.0.0.1:8000/api`; set `VITE_API_BASE_URL` to use another API address.
 
 See [backend/README.md](../../backend/README.md) for setup and endpoint details.

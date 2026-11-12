@@ -21,6 +21,26 @@ ARES is planned as a standalone PostgreSQL-backed supply-chain visibility and re
 2. For local email delivery, configure SMTP only when a demo requires it; outbound response actions remain disabled by default.
 3. Run the local demonstration by following the [deployment and operations guide](deployment.md). Use GitHub for source, pull requests, and build automation; GitHub Pages cannot host ARES's Django API and PostgreSQL database.
 
+## Agentic AI and resilience-intelligence expansion
+
+This workstream follows the requirements in the master development prompt and extends the existing product phases above.
+
+| AI work phase | Scope | Status |
+| --- | --- | --- |
+| 1. Data readiness and shared contracts | Read-only data readiness API; explicit coverage, provenance, freshness, and model data gaps; validated, provider-neutral agent result contract | Implemented locally; focused tests are added but could not run because the current backend virtual environment is missing `daphne`; see [agentic AI foundation](../engineering/agentic-ai-foundation.md) |
+| 2. Agent runtime and provider abstraction | Configurable provider, disabled/unavailable state without credentials, execution lifecycle and read-only tools | Not started |
+| 3. Specialist agents and coordinator | Risk, supplier, inventory, logistics, procurement agents with structured coordination | Not started |
+| 4. Predictive model evaluation | Chronological baselines/comparison, calibration, reproducible evaluation and persisted metrics | Partially implemented; current models remain experimental |
+| 5. Disaster and geospatial exposure | Improve source event lifecycle/geometry handling and evidence-based exposure paths | Partially implemented; route and facility data gaps remain |
+| 6. Recovery strategy simulation | Compare verified supplier, stock redistribution, emergency procurement and route options in isolated simulations | Partially implemented; current simulator is basic and options depend on missing data |
+| 7. Outcome tracking and calibration | Connect predictions, approved actions, verified outcomes and effectiveness reporting | Partially implemented; labels are limited and reviewer supplied |
+| 8. Human-reviewed end-to-end coordination | Orchestrate disruption-to-recommendation workflow and approval handoff | Partially implemented; response plan approvals exist, agent workflow does not |
+| 9. Agentic and predictive dashboard | Agent control centre, model evaluation, enhanced simulation views | Not started |
+| 10. Integrated reliability and governance | Agent-specific security, timeouts/retries, audit, prompt/model governance and complete integration coverage | Partially implemented at core-platform level |
+| 11. Documentation and demonstration | End-to-end architecture, provider configuration, operations runbook and demonstration flow | Partially implemented; Phase 1 contract/readiness docs added |
+
+The measured requirements for supplier alternatives, shipment routes, and training history are listed by `GET /api/ai/data-readiness/`. Existing ARES capabilities are reused; this expansion does not replace the risk rules, current forecast implementations, or digital twin.
+
 ## Immediate next step
 
 Apply migration `0012_digital_twin` in the configured local PostgreSQL environment, then run `python manage.py test supply_chain.tests` and the Compose demo. Add verified coordinates for the supplier/warehouse/disruption records used in the demonstration; missing coordinates remain unavailable by design. Test a current source-provided GDACS event and one simulation, then capture screenshots from that authenticated run. Do not use country/region name matches as evidence of exposure, and do not present a what-if result as an operational prediction.
