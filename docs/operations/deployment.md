@@ -15,7 +15,7 @@ docker compose --env-file .env.demo -f compose.demo.yaml ps
 docker compose --env-file .env.demo -f compose.demo.yaml logs --tail=100 api gdacs-worker backup-worker web
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The first startup builds the React bundle and Django image, starts isolated PostgreSQL and Redis containers, applies migrations, and then starts the API, dashboard, and GDACS poller. PostgreSQL and Redis are on a private Compose network and are not published to the host; the web port binds only to `127.0.0.1`. Django debug mode and the demo credentials in `.env.demo.example` are intentionally local-only; use them only for this loopback demo.
+Open [http://localhost:8080](http://localhost:8080). The first startup builds the React bundle and Django image, starts isolated PostgreSQL and Redis containers, applies migrations, and then starts the API, dashboard, GDACS poller, and digital-twin event retry worker. PostgreSQL and Redis are on a private Compose network and are not published to the host; the web port binds only to `127.0.0.1`. Django debug mode and the demo credentials in `.env.demo.example` are intentionally local-only; use them only for this loopback demo.
 
 Create an administrator interactively:
 
@@ -36,6 +36,7 @@ GitHub is appropriate for the repository, collaboration, and build automation. G
 - Authenticated WebSocket invalidation events carry only resource/action metadata and publish after database commit. The browser reloads current data through the authenticated API. Redis carries event groups across API and worker processes; the existing 30-second dashboard polling remains as a fallback.
 - `migrate` applies Django migrations before the API and workers start.
 - `gdacs-worker` continuously polls GDACS using the configured interval.
+- `digital-twin-retry-worker` retries any durable WebSocket invalidation that could not be published; clients can also recover with the sequence-based changes API.
 - `notification-worker` is opt-in under the `notifications` Compose profile. It exits without modifying queued notifications while email delivery is disabled.
 - `backup-worker` uses PostgreSQL's custom archive format, validates each dump, rotates local copies, and reports unhealthy when no recent dump exists.
 - In production, PostgreSQL and Redis are external managed/private services. The local demo includes both as isolated Compose services.
@@ -107,6 +108,7 @@ Configure provider/host alerts for:
 - Managed PostgreSQL availability, connection/storage limits, replication lag, and provider backup status.
 - `gdacs-worker` last successful poll and feed freshness via authenticated `/api/feeds/status/`, plus repeated sync failures and ingestion lag.
 - Redis availability and repeated WebSocket reconnects; dashboard polling continues while live updates are disconnected.
+- Digital-twin change-ledger pending delivery count and retry-worker restarts; authenticated sync status and changes-since APIs provide client recovery.
 - Notification worker/outbox retry failures when enabled, and missing/stale local or off-host backups.
 - Recovery drill completion and restoration duration.
 

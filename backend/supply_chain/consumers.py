@@ -75,6 +75,8 @@ class DashboardEventsConsumer(AsyncJsonWebsocketConsumer):
                 "type": "data_changed",
                 "resource": event["resource"],
                 "action": event["action"],
+                "sequence": event.get("sequence"),
+                "entity_id": event.get("entity_id", ""),
             })
 
     async def disconnect(self, close_code):

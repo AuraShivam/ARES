@@ -14,8 +14,9 @@ Browser
                  │ Django API and background workers    │
                  ├── supply_chain models and REST API   │
                  ├── explainable risk rules and ML forecasts │
+                 ├── digital-twin graph/impact/simulation│
                  ├── disruption plans and audit trail   │
-                 └── GDACS and notification workers     │
+                 └── GDACS, retry, and notification workers │
                            │                 │
                        PostgreSQL          Redis
 ```
@@ -31,6 +32,7 @@ Browser
 | `backend/supply_chain/views.py` | REST endpoints, overview, health, and risk assessment handlers |
 | `backend/supply_chain/risk.py` | Explainable deterministic scoring and advisory recommendations |
 | `backend/supply_chain/demand_forecast.py` | Experimental per-material demand forecasts and advisory stock planning |
+| `backend/supply_chain/digital_twin/` | Database-derived graph, GeoJSON, impact propagation, health KPIs, and isolated what-if scenarios |
 | `backend/supply_chain/migrations/` | Versioned database schema changes |
 | `frontend/src/app/` | Dashboard shell, screen state, API orchestration, and user actions |
 | `frontend/src/config/` | Navigation and table field configuration |
@@ -48,7 +50,7 @@ Browser
 
 ## Dashboard refresh behavior
 
-The authenticated dashboard opens a same-origin WebSocket at `/ws/events/` and authenticates with its expiring API token in the first message, not in the URL. Django broadcasts only a resource name and create/update/delete action after the database transaction commits. The browser uses that signal to reload current page data through the authenticated API; the socket never sends record contents. Redis shares event groups among Daphne and background workers. The browser reconnects with backoff and retains 30-second visible-tab polling as a fallback. A relative timestamp reports the last successful refresh; API failures mark displayed data stale.
+The authenticated dashboard opens a same-origin WebSocket at `/ws/events/` and authenticates with its expiring API token in the first message, not in the URL. For graph-relevant changes, Django writes a monotonically increasing change sequence and broadcasts resource/action/sequence metadata after the database change. The socket never sends record contents. Redis shares event groups among Daphne and workers; `retry_digital_twin_events` retries pending publishes. Clients recover with `GET /api/digital-twin/changes/?since=<sequence>`. The browser reconnects with backoff and retains 30-second visible-tab polling as a fallback. A relative timestamp reports the last successful refresh; API failures mark displayed data stale.
 
 ## Data sources and database
 
@@ -60,6 +62,7 @@ The MVP receives data through its APIs, dashboard workflows, the demo seed comma
 
 - CRUD resources: suppliers, materials, warehouses, inventory, inventory movements, purchase orders, purchase-order lines, shipments, disruptions, and audit events.
 - `GET /api/map/data/` provides shipment endpoints with coordinates and active GDACS feed-event points for the authenticated world map.
+- The digital twin APIs provide the current relationship graph, GeoJSON locations, health metrics, reasoned disruption propagation, isolated simulations, and sequence-based sync recovery; see the [digital twin guide](digital-twin.md).
 - Response workflow: `/api/response-plans/` and `/api/response-actions/`; plan changes and review transitions are written to audit history.
 - Access: authenticated API tokens for the dashboard, with the `ares_approvers` group or Django staff status required for approval decisions; `/api/health/` and login are the only public API routes.
 - Summary and health: `GET /api/overview/`, `GET /api/health/`.

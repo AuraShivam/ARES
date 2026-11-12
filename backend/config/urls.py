@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from supply_chain.import_views import import_commit, import_detail, import_preview, import_templates, imports_list
 from supply_chain.auth_views import current_user, login, logout
 from supply_chain.feed_views import feed_status
+from supply_chain.digital_twin import api as digital_twin_api
 from supply_chain.views import (
     AuditEventViewSet, DisruptionViewSet, InventoryMovementViewSet, InventoryViewSet,
     MaterialViewSet, NotificationDeliveryViewSet, PurchaseOrderLineViewSet, PurchaseOrderViewSet,
@@ -37,6 +38,18 @@ urlpatterns = [
     path("api/auth/logout/", logout, name="api-logout"),
     path("api/inventory/forecast/", inventory_forecast, name="inventory-forecast"),
     path("api/map/data/", map_data, name="map-data"),
+    path("api/digital-twin/graph/", digital_twin_api.graph_snapshot, name="digital-twin-graph"),
+    path("api/digital-twin/nodes/", digital_twin_api.graph_nodes, name="digital-twin-nodes"),
+    path("api/digital-twin/edges/", digital_twin_api.graph_edges, name="digital-twin-edges"),
+    path("api/digital-twin/entities/<str:entity_type>/<uuid:entity_id>/", digital_twin_api.entity_detail, name="digital-twin-entity"),
+    path("api/digital-twin/geo/", digital_twin_api.geo_data, name="digital-twin-geo"),
+    path("api/digital-twin/health/", digital_twin_api.health_overview, name="digital-twin-health"),
+    path("api/digital-twin/impacts/<uuid:disruption_id>/", digital_twin_api.disruption_impact, name="digital-twin-impact"),
+    path("api/digital-twin/dependencies/<str:entity_type>/<uuid:entity_id>/", digital_twin_api.affected_dependencies, name="digital-twin-dependencies"),
+    path("api/digital-twin/sync/status/", digital_twin_api.sync_status, name="digital-twin-sync-status"),
+    path("api/digital-twin/changes/", digital_twin_api.changes_since, name="digital-twin-changes"),
+    path("api/digital-twin/simulations/", digital_twin_api.simulations, name="digital-twin-simulations"),
+    path("api/digital-twin/simulations/<uuid:simulation_id>/", digital_twin_api.simulation_detail, name="digital-twin-simulation-detail"),
     path("api/", include(router.urls)),
     path("api/imports/templates/", import_templates, name="import-templates"),
     path("api/feeds/status/", feed_status, name="feed-status"),

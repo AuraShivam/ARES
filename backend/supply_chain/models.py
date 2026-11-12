@@ -30,12 +30,18 @@ class Supplier(SourceTrackedModel):
     code = models.CharField(max_length=40, unique=True)
     country = models.CharField(max_length=80, blank=True)
     region = models.CharField(max_length=100, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
     risk_score = models.PositiveSmallIntegerField(default=20, validators=[MaxValueValidator(100)])
     lead_time_days = models.PositiveSmallIntegerField(default=14)
     status = models.CharField(max_length=20, choices=[("active", "Active"), ("watch", "Watch"), ("blocked", "Blocked")], default="active")
 
     class Meta:
         ordering = ["name"]
+        constraints = [models.CheckConstraint(
+            condition=(Q(latitude__isnull=True, longitude__isnull=True) | Q(latitude__isnull=False, longitude__isnull=False)),
+            name="supplier_coordinate_pair",
+        )]
 
     def __str__(self):
         return f"{self.code} — {self.name}"
@@ -61,11 +67,17 @@ class Warehouse(SourceTrackedModel):
     name = models.CharField(max_length=160)
     region = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=80, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
     warehouse_type = models.CharField(max_length=20, choices=[("distribution", "Distribution center"), ("factory", "Factory"), ("supplier", "Supplier site"), ("other", "Other")], default="distribution")
     active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["name"]
+        constraints = [models.CheckConstraint(
+            condition=(Q(latitude__isnull=True, longitude__isnull=True) | Q(latitude__isnull=False, longitude__isnull=False)),
+            name="warehouse_coordinate_pair",
+        )]
 
     def __str__(self):
         return f"{self.code} — {self.name}"
@@ -229,6 +241,8 @@ class Disruption(SourceTrackedModel):
     disruption_type = models.CharField(max_length=80, default="logistics")
     description = models.TextField(blank=True)
     affected_region = models.CharField(max_length=120, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
     severity = models.CharField(max_length=20, choices=SEVERITY, default="medium")
     status = models.CharField(max_length=20, choices=STATUS, default="open")
     confidence = models.PositiveSmallIntegerField(default=70, validators=[MaxValueValidator(100)])
@@ -238,6 +252,10 @@ class Disruption(SourceTrackedModel):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
+            models.CheckConstraint(
+                condition=(Q(latitude__isnull=True, longitude__isnull=True) | Q(latitude__isnull=False, longitude__isnull=False)),
+                name="disruption_coordinate_pair",
+            ),
             models.UniqueConstraint(
                 fields=["source_name", "source_key"],
                 condition=~Q(source_name="") & ~Q(source_key=""),
@@ -549,3 +567,32 @@ class NotificationDelivery(TimestampedModel):
     class Meta:
         ordering = ["created_at"]
         indexes = [models.Index(fields=["status", "next_attempt_at"], name="notification_due_idx")]
+
+
+class DigitalTwinChangeEvent(models.Model):
+    """Durable, ordered invalidation events used to recover after a socket disconnect."""
+    sequence = models.BigAutoField(primary_key=True)
+    resource = models.CharField(max_length=80)
+    entity_id = models.CharField(max_length=80)
+    action = models.CharField(max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    delivery_attempts = models.PositiveIntegerField(default=0)
+    last_delivery_error = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        ordering = ["sequence"]
+        indexes = [models.Index(fields=["published_at", "sequence"], name="twin_change_pending_idx")]
+
+
+class DigitalTwinSimulation(TimestampedModel):
+    """Persisted what-if result; it never mutates operational records."""
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="ares_digital_twin_simulations",
+    )
+    scenario = models.JSONField(default=dict)
+    result = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-created_at"]

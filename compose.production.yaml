@@ -45,6 +45,16 @@ services:
     networks: [app]
     stop_grace_period: 30s
 
+  digital-twin-retry-worker:
+    <<: *backend-image
+    command: ["python", "manage.py", "retry_digital_twin_events", "--watch", "--interval", "10"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks: [app]
+    stop_grace_period: 30s
+
   notification-worker:
     <<: *backend-image
     profiles: [notifications]

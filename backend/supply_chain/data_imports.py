@@ -23,7 +23,7 @@ IMPORT_SCHEMAS = {
     "supplier": {
         "label": "Suppliers",
         "required": ["code", "name"],
-        "optional": ["country", "region", "risk_score", "lead_time_days", "status", "source_key", "source_updated_at"],
+        "optional": ["country", "region", "latitude", "longitude", "risk_score", "lead_time_days", "status", "source_key", "source_updated_at"],
         "key": "code",
     },
     "material": {
@@ -35,7 +35,7 @@ IMPORT_SCHEMAS = {
     "warehouse": {
         "label": "Warehouses",
         "required": ["code", "name"],
-        "optional": ["region", "country", "warehouse_type", "active", "source_key", "source_updated_at"],
+        "optional": ["region", "country", "latitude", "longitude", "warehouse_type", "active", "source_key", "source_updated_at"],
         "key": "code",
     },
     "inventory": {
@@ -71,7 +71,7 @@ IMPORT_SCHEMAS = {
         "required": ["source_key", "title", "severity"],
         "optional": [
             "disruption_type", "description", "affected_region", "status", "confidence",
-            "affected_supplier_code", "shipment_reference", "source_updated_at",
+            "latitude", "longitude", "affected_supplier_code", "shipment_reference", "source_updated_at",
         ],
         "key": "source name + source_key",
     },
@@ -278,6 +278,8 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         _set_value(candidate, row, "name", "name", errors, required=True)
         _set_value(candidate, row, "country", "country", errors)
         _set_value(candidate, row, "region", "region", errors)
+        _set_value(candidate, row, "latitude", "latitude", errors, _parse_decimal)
+        _set_value(candidate, row, "longitude", "longitude", errors, _parse_decimal)
         _set_value(candidate, row, "risk_score", "risk_score", errors, _parse_integer)
         _set_value(candidate, row, "lead_time_days", "lead_time_days", errors, _parse_integer)
         _set_value(candidate, row, "status", "status", errors, str.casefold)
@@ -294,6 +296,8 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         _set_value(candidate, row, "name", "name", errors, required=True)
         _set_value(candidate, row, "region", "region", errors)
         _set_value(candidate, row, "country", "country", errors)
+        _set_value(candidate, row, "latitude", "latitude", errors, _parse_decimal)
+        _set_value(candidate, row, "longitude", "longitude", errors, _parse_decimal)
         _set_value(candidate, row, "warehouse_type", "warehouse_type", errors, str.casefold)
         _set_value(candidate, row, "active", "active", errors, _parse_bool)
     elif entity_type == "inventory":
@@ -384,6 +388,8 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         _set_value(candidate, row, "disruption_type", "disruption_type", errors)
         _set_value(candidate, row, "description", "description", errors)
         _set_value(candidate, row, "affected_region", "affected_region", errors)
+        _set_value(candidate, row, "latitude", "latitude", errors, _parse_decimal)
+        _set_value(candidate, row, "longitude", "longitude", errors, _parse_decimal)
         _set_value(candidate, row, "severity", "severity", errors, str.casefold, required=True)
         _set_value(candidate, row, "status", "status", errors, str.casefold)
         _set_value(candidate, row, "confidence", "confidence", errors, _parse_integer)

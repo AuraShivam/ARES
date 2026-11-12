@@ -130,9 +130,9 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
 
   return <div className="network-map-page">
     <div className="map-metrics-grid">
-      <Metric label={includeDelivered ? 'Shipments shown' : 'Open shipments'} value={currentShipments.length} detail={`${routeCount} with a full route`} />
+      <Metric label={includeDelivered ? 'Shipments shown' : 'Open shipments'} value={currentShipments.length} detail={`${routeCount} with both endpoint coordinates`} />
       <Metric label="GDACS events" value={disasters.length} detail={`${locatedDisasters.length} with map coordinates`} tone="disaster" />
-      <Metric label="Routes needing coordinates" value={incompleteRoutes.length} detail={`${unlocatedShipments.length} have no mapped endpoint`} tone={incompleteRoutes.length ? 'attention' : ''} />
+      <Metric label="Shipments missing endpoint coordinates" value={incompleteRoutes.length} detail={`${unlocatedShipments.length} have no mapped endpoint`} tone={incompleteRoutes.length ? 'attention' : ''} />
       <Metric label="GDACS updated" value={feed.last_success_at ? formatDate(feed.last_success_at, true) : 'Not yet'} detail={feedState} tone={feed.status === 'ok' ? 'connected' : 'attention'} />
     </div>
 
@@ -160,7 +160,7 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
         {!locations.length && !loading && <div className="map-empty-overlay"><strong>No mapped coordinates yet</strong><span>GDACS events and shipments appear here when their coordinates are available.</span></div>}
         {loading && <div className="map-loading-overlay"><i />Updating map data…</div>}
       </div>
-      <div className="map-footnote"><span>Basemap by OpenFreeMap · © OpenMapTiles · Data © OpenStreetMap contributors</span><span>GDACS is refreshed by the ARES feed worker; the dashboard checks for updates every 30 seconds.</span></div>
+      <div className="map-footnote"><span>Basemap by OpenFreeMap · © OpenMapTiles · Data © OpenStreetMap contributors</span><span>Shipment lines directly connect recorded endpoints; ARES has no stored carrier route geometry. GDACS is refreshed by the ARES feed worker.</span></div>
     </section>
 
     <div className="map-detail-grid">
@@ -178,10 +178,10 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
       </section>
 
       <section className="panel map-detail-panel">
-        <div className="panel-heading"><div><p className="eyebrow">LOCATION DATA</p><h2>Routes needing coordinates</h2><p>ARES does not guess locations from free-text city names.</p></div><button type="button" className="text-button" onClick={() => onNavigate?.('imports')}>Open data onboarding →</button></div>
+        <div className="panel-heading"><div><p className="eyebrow">LOCATION DATA</p><h2>Shipments missing endpoint coordinates</h2><p>ARES does not guess locations from free-text city names.</p></div><button type="button" className="text-button" onClick={() => onNavigate?.('imports')}>Open data onboarding →</button></div>
         {incompleteRoutes.length
           ? <>
-              <div className="map-unlocated-note">Add paired latitude and longitude values for both endpoints in the shipment CSV to plot full routes.</div>
+              <div className="map-unlocated-note">Add paired latitude and longitude values for both endpoints in the shipment CSV to plot a direct endpoint connector. ARES does not store carrier route geometry.</div>
               <div className="map-event-list">{incompleteRoutes.slice(0, 5).map((shipment) => <article className="map-event-row" key={shipment.id}>
                 <i className="legend-route" />
                 <div><strong>{shipment.reference}</strong><span>{shipment.origin} → {shipment.destination}</span></div>
@@ -189,7 +189,7 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
               </article>)}</div>
               {incompleteRoutes.length > 5 && <p className="map-limit-note">And {incompleteRoutes.length - 5} more shipments need coordinates.</p>}
             </>
-          : <p className="map-empty-list">All displayed shipments have coordinates for both route endpoints.</p>}
+          : <p className="map-empty-list">All displayed shipments have coordinates for both endpoints. The line connects those points directly; it is not a verified carrier route.</p>}
         {counts.shipments_truncated && <p className="map-limit-note">The map is showing the first {counts.shipments_returned} of {counts.shipments_total} shipment records.</p>}
       </section>
     </div>

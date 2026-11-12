@@ -8,14 +8,14 @@ Import in dependency order. Materials may refer to suppliers, inventory refers t
 
 | Type | Required columns | Optional columns | Match key |
 | --- | --- | --- | --- |
-| Suppliers | `code`, `name` | `country`, `region`, `risk_score`, `lead_time_days`, `status`, `source_key`, `source_updated_at` | `code` |
+| Suppliers | `code`, `name` | `country`, `region`, `latitude`, `longitude`, `risk_score`, `lead_time_days`, `status`, `source_key`, `source_updated_at` | `code` |
 | Materials | `sku`, `name` | `category`, `unit`, `criticality`, `preferred_supplier_code`, `source_key`, `source_updated_at` | `sku` |
-| Warehouses | `code`, `name` | `region`, `country`, `warehouse_type`, `active`, `source_key`, `source_updated_at` | `code` |
+| Warehouses | `code`, `name` | `region`, `country`, `latitude`, `longitude`, `warehouse_type`, `active`, `source_key`, `source_updated_at` | `code` |
 | Inventory balances | `material_sku`, `warehouse_code`, `quantity` | `reorder_point`, `unit_cost`, `source_key`, `source_updated_at` | `material_sku` + `warehouse_code` |
 | Dated inventory movements | `source_key`, `material_sku`, `warehouse_code`, `movement_type`, `quantity_delta`, `occurred_at` | `purchase_order_number`, `reference`, `notes` | `source_name` + `source_key` |
 | Purchase orders | `number`, `supplier_code`, `material_sku`, `quantity` | `ordered_at`, `expected_date`, `status`, `currency`, `unit_price`, `source_key`, `source_updated_at` | `number` |
 | Shipments | `reference`, `purchase_order_number`, `origin`, `destination` | `carrier`, `eta`, `actual_delivery_date`, `status`, `risk_score`, `origin_latitude`, `origin_longitude`, `destination_latitude`, `destination_longitude`, `source_key`, `source_updated_at` | `reference` |
-| Disruptions | `source_key`, `title`, `severity` | `disruption_type`, `description`, `affected_region`, `status`, `confidence`, `affected_supplier_code`, `shipment_reference`, `source_updated_at` | `source_name` + `source_key` |
+| Disruptions | `source_key`, `title`, `severity` | `disruption_type`, `description`, `affected_region`, `latitude`, `longitude`, `status`, `confidence`, `affected_supplier_code`, `shipment_reference`, `source_updated_at` | `source_name` + `source_key` |
 
 Templates can be downloaded from the import dialog. Files must be UTF-8 CSV, at most 5 MB, and contain no more than 2,000 nonblank data rows. Header matching ignores case and normalizes spaces/punctuation to underscores; unsupported, duplicate, or missing required headers are rejected.
 
@@ -33,12 +33,15 @@ Dates use `YYYY-MM-DD`. `source_updated_at` must be a timezone-aware ISO 8601 ti
 - Updating an existing inventory balance creates an inventory adjustment movement when the quantity changes. The initial balance created for a new inventory record does not create a movement.
 - Historical movement imports preserve `occurred_at` as the event date and do not change the current inventory balance. Use negative `quantity_delta` for `issue` consumption and positive `quantity_delta` for `receipt`; only issue movements train demand forecasts. Each row must reference an existing material/warehouse balance and have a stable source key. Link a receipt to `purchase_order_number` when possible; ARES uses at least three linked receipt orders to estimate observed lead time for a material's preferred supplier. `balance_after` is left blank for imported history because ARES does not reconstruct historical balances from imported events.
 - Shipment rows resolve their purchase-order number to an existing order. Disruption rows match on the selected source name and source key; optional supplier/shipment references must already exist.
-- Shipment endpoint coordinates are optional decimal degrees. Provide latitude and longitude together for each endpoint, within latitude `-90..90` and longitude `-180..180`. The World map plots routes only when coordinates are provided; ARES does not geocode free-text origin or destination values.
+- Shipment endpoint coordinates are optional decimal degrees. Provide latitude and longitude together for each endpoint, within latitude `-90..90` and longitude `-180..180`. The World map plots endpoint markers and connects both supplied endpoints with a direct line; this is not a stored or verified carrier route. ARES does not geocode free-text origin or destination values.
+- Supplier, warehouse, and disruption coordinates are also optional decimal degrees. Provide latitude and longitude together within `-90..90` / `-180..180`. ARES never infers them from country, region, city text, or postal codes; missing coordinates appear as unavailable in the digital twin.
 - `ordered_at` and `actual_delivery_date` are needed to reconstruct historical delay examples. An imported actual date is unverified and is excluded from model training until an ARES approver reviews it in **Risk intelligence**.
 
 ## World map
 
 The authenticated `GET /api/map/data/` endpoint returns shipments with optional endpoint coordinates and current, unexpired GDACS events from the most recent feed sync. GDACS point coordinates are plotted when supplied by the source. The dashboard refreshes map data every 30 seconds; the GDACS connector itself follows the feed's minimum six-minute polling interval. Shipment CSV templates include the four optional coordinate columns. The map uses the OpenFreeMap Positron vector style through MapLibre GL and displays OpenFreeMap, OpenMapTiles, and OpenStreetMap attribution. OpenFreeMap's public instance requires no API key or registration; check its terms for service details and usage expectations.
+
+The supply-chain digital twin's `GET /api/digital-twin/geo/` adds coordinates from suppliers, warehouses, shipment endpoints, manual disruptions, and active GDACS GeoJSON geometry. GDACS source geometry is stored with its feed event and is shown as supplied; expired GDACS geometries are omitted from the current geo view. Shipment endpoint connectors are not carrier route paths.
 
 ## GDACS live feed
 

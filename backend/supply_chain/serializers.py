@@ -19,6 +19,13 @@ class SupplierSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("source_name", "source_key", "source_updated_at")
 
+    def validate(self, attrs):
+        latitude = attrs.get("latitude", getattr(self.instance, "latitude", None))
+        longitude = attrs.get("longitude", getattr(self.instance, "longitude", None))
+        if (latitude is None) != (longitude is None):
+            raise serializers.ValidationError({"latitude": "Provide latitude and longitude together."})
+        return attrs
+
 
 class MaterialSerializer(serializers.ModelSerializer):
     preferred_supplier_name = serializers.CharField(source="preferred_supplier.name", read_only=True, default=None)
@@ -34,6 +41,13 @@ class WarehouseSerializer(serializers.ModelSerializer):
         model = Warehouse
         fields = "__all__"
         read_only_fields = ("source_name", "source_key", "source_updated_at")
+
+    def validate(self, attrs):
+        latitude = attrs.get("latitude", getattr(self.instance, "latitude", None))
+        longitude = attrs.get("longitude", getattr(self.instance, "longitude", None))
+        if (latitude is None) != (longitude is None):
+            raise serializers.ValidationError({"latitude": "Provide latitude and longitude together."})
+        return attrs
 
 
 def _warehouse_code_for_label(location):
@@ -348,6 +362,13 @@ class DisruptionSerializer(serializers.ModelSerializer):
         model = Disruption
         fields = "__all__"
         read_only_fields = ("source_name", "source_key", "source_updated_at")
+
+    def validate(self, attrs):
+        latitude = attrs.get("latitude", getattr(self.instance, "latitude", None))
+        longitude = attrs.get("longitude", getattr(self.instance, "longitude", None))
+        if (latitude is None) != (longitude is None):
+            raise serializers.ValidationError({"latitude": "Provide latitude and longitude together."})
+        return attrs
 
 
 class RiskAssessmentSnapshotSerializer(serializers.ModelSerializer):

@@ -2,6 +2,7 @@ const NAV_GROUPS = [
   {
     title: 'Monitor',
     items: [
+      ['digital-twin', 'Supply chain twin', '◈'],
       ['network-map', 'World map', '⌖'],
       ['risk-intelligence', 'Risk intelligence', '⌁'],
       ['disruptions', 'Disruptions', '⌁'],
@@ -39,7 +40,8 @@ const NAV_GROUPS = [
 
 const SECTIONS = {
   overview: { title: 'Network overview', description: 'A supply-chain view refreshed automatically every 30 seconds.' },
-  'network-map': { title: 'World map', description: 'View shipment routes alongside current natural-disaster alerts from GDACS.' },
+  'network-map': { title: 'World map', description: 'View shipment endpoint connections alongside current natural-disaster alerts from GDACS.' },
+  'digital-twin': { title: 'Supply chain digital twin', description: 'Explore live ARES dependencies, geographic exposure, operational health, and isolated what-if scenarios.' },
   'risk-intelligence': { title: 'Risk intelligence', description: 'Review explainable assessments, threshold alerts, and evidence-backed outcomes.' },
   disruptions: { title: 'Disruptions', description: 'Review events, assess exposure, and record a response.' },
   'response-plans': { title: 'Response plans', description: 'Assign, review, approve, and track disruption response work.' },

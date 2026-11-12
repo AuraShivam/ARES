@@ -12,6 +12,7 @@ import LoginScreen from '../features/auth/LoginScreen.jsx'
 import ExternalFeedStatus from '../features/imports/ExternalFeedStatus.jsx'
 import RiskIntelligencePage from '../features/risk/RiskIntelligencePage.jsx'
 import DemandPlanningPage from '../features/inventory/DemandPlanningPage.jsx'
+const DigitalTwinPage = lazy(() => import('../features/digital-twin/DigitalTwinPage.jsx'))
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 30_000
 const NetworkMapPage = lazy(() => import('../features/map/NetworkMapPage.jsx'))
@@ -29,6 +30,7 @@ function App() {
   const [riskData, setRiskData] = useState({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
   const [demandData, setDemandData] = useState(null)
   const [mapData, setMapData] = useState(null)
+  const [digitalTwinData, setDigitalTwinData] = useState(null)
   const [records, setRecords] = useState([])
   const [homeData, setHomeData] = useState({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
   const [loading, setLoading] = useState(true)
@@ -57,6 +59,7 @@ function App() {
       setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
       setDemandData(null)
       setMapData(null)
+      setDigitalTwinData(null)
       setLastUpdated(null)
       setRefreshState('connecting')
       setModal('')
@@ -127,6 +130,33 @@ function App() {
         setFeedStatus(null)
       } else if (section === 'network-map') {
         setMapData(await request('/map/data/', { signal }))
+        setRecords([])
+        setFeedStatus(null)
+      } else if (section === 'digital-twin') {
+        const sync = await request('/digital-twin/sync/status/', { signal })
+        const [graph, geo, health] = await Promise.all([
+          request('/digital-twin/graph/?page_size=100', { signal }),
+          request('/digital-twin/geo/', { signal }),
+          request('/digital-twin/health/', { signal }),
+        ])
+        let storedCursor = null
+        try {
+          const value = window.sessionStorage.getItem('ares-digital-twin-sequence')
+          if (value !== null) storedCursor = Number(value)
+        } catch { storedCursor = null }
+        let cursor = storedCursor === null ? sync.latest_sequence : storedCursor
+        if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > sync.latest_sequence) cursor = sync.latest_sequence
+        const recoveredChanges = []
+        let next = cursor
+        for (let page = 0; page < 20; page += 1) {
+          const result = await request(`/digital-twin/changes/?since=${next}&limit=500`, { signal })
+          recoveredChanges.push(...(result.results || []))
+          next = result.next_since
+          if (!result.has_more) break
+        }
+        cursor = next
+        try { window.sessionStorage.setItem('ares-digital-twin-sequence', String(cursor)) } catch { /* Storage may be unavailable in embedded contexts. */ }
+        setDigitalTwinData({ graph, geo, health, sync, recoveredChanges: recoveredChanges.slice(-50) })
         setRecords([])
         setFeedStatus(null)
       } else {
@@ -211,6 +241,7 @@ function App() {
         if (event.type === 'ready') {
           reconnectAttempt = 0
           setLiveUpdates('connected')
+          if (section === 'digital-twin') refresh(undefined, true)
         } else if (event.type === 'data_changed') {
           window.clearTimeout(refreshTimer)
           refreshTimer = window.setTimeout(() => {
@@ -230,7 +261,7 @@ function App() {
       window.clearTimeout(refreshTimer)
       socket?.close(1000, 'Dashboard closed')
     }
-  }, [refresh, auth, authInitializing])
+  }, [refresh, auth, authInitializing, section])
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Date.now()), DASHBOARD_REFRESH_INTERVAL_MS)
@@ -430,6 +461,7 @@ function App() {
     setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
     setDemandData(null)
     setMapData(null)
+    setDigitalTwinData(null)
     setLastUpdated(null)
     setRefreshState('connecting')
   }
@@ -601,6 +633,8 @@ function App() {
               ? <DemandPlanningPage data={demandData} loading={loading} />
             : section === 'network-map'
               ? <Suspense fallback={<LoadingState />}><NetworkMapPage data={mapData} loading={loading} onNavigate={navigate} /></Suspense>
+              : section === 'digital-twin'
+                ? <Suspense fallback={<LoadingState />}><DigitalTwinPage data={digitalTwinData} loading={loading} liveUpdates={liveUpdates} /></Suspense>
             : <section className="panel records-panel">
               <div className="records-heading">
                 <div><h2>{current.title}</h2><p>{records.length} {records.length === 1 ? 'record' : 'records'} in the local dataset</p></div>

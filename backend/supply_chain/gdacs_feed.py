@@ -270,8 +270,16 @@ def _api_item_values(feature, minimum_level):
     geometry = feature.get("geometry") if isinstance(feature.get("geometry"), dict) else {}
     coordinates = geometry.get("coordinates")
     point = ""
+    latitude = longitude = None
     if geometry.get("type") == "Point" and isinstance(coordinates, (list, tuple)) and len(coordinates) >= 2:
-        point = f"{coordinates[1]},{coordinates[0]}"
+        try:
+            longitude, latitude = float(coordinates[0]), float(coordinates[1])
+            if -180 <= longitude <= 180 and -90 <= latitude <= 90:
+                point = f"{latitude},{longitude}"
+            else:
+                latitude = longitude = None
+        except (TypeError, ValueError):
+            latitude = longitude = None
     payload = {
         "source": FEED_SOURCE_NAME,
         "event_type": event_type_code,
@@ -286,6 +294,8 @@ def _api_item_values(feature, minimum_level):
         "from_date": _text_value(_property(properties, "fromdate")),
         "to_date": _text_value(_property(properties, "todate")),
         "geometry_type": _text_value(geometry.get("type")),
+        # Preserve the source geometry for point-in-boundary exposure analysis.
+        "geometry": geometry if geometry.get("type") in {"Point", "Polygon", "MultiPolygon"} else None,
         "point": point,
         "iso3": iso3,
     }
@@ -300,6 +310,8 @@ def _api_item_values(feature, minimum_level):
         "severity": SEVERITY_MAP[alert_level],
         "confidence": CONFIDENCE_MAP[alert_level],
         "affected_region": region,
+        "latitude": latitude,
+        "longitude": longitude,
         "geographies": geographies,
         "issued_at": issued_at,
         "effective_at": effective_at,
@@ -429,6 +441,8 @@ def _upsert_alert(feed, values):
                 disruption_type=values["event_type"],
                 description=description,
                 affected_region=values["affected_region"],
+                latitude=values.get("latitude"),
+                longitude=values.get("longitude"),
                 severity=values["severity"],
                 confidence=values["confidence"],
                 source_name=FEED_SOURCE_NAME,
@@ -443,6 +457,8 @@ def _upsert_alert(feed, values):
             disruption.disruption_type = values["event_type"]
             disruption.description = description
             disruption.affected_region = values["affected_region"]
+            disruption.latitude = values.get("latitude")
+            disruption.longitude = values.get("longitude")
             disruption.severity = values["severity"]
             disruption.confidence = values["confidence"]
             disruption.source_name = FEED_SOURCE_NAME
@@ -450,6 +466,7 @@ def _upsert_alert(feed, values):
             disruption.source_updated_at = values["issued_at"] or values["effective_at"]
             disruption.save(update_fields=[
                 "title", "disruption_type", "description", "affected_region", "severity",
+                "latitude", "longitude",
                 "confidence", "source_name", "source_key", "source_updated_at", "updated_at",
             ])
             action = "update"

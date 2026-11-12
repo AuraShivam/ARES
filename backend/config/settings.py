@@ -1,4 +1,6 @@
 import os
+import json
+import math
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 
@@ -131,3 +133,28 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
 DEFAULT_FROM_EMAIL = os.getenv("ARES_NOTIFICATION_FROM_EMAIL", "")
+
+# Approximate point-to-hazard exposure distances in km. These are configurable
+# policy defaults; they are not claims about a disaster's actual footprint.
+_default_exposure_thresholds = {
+    "default": {"low": 25, "medium": 50, "high": 100, "critical": 250},
+    "earthquake": {"low": 50, "medium": 100, "high": 200, "critical": 400},
+    "flood": {"low": 25, "medium": 50, "high": 100, "critical": 200},
+    "tropical cyclone": {"low": 50, "medium": 100, "high": 200, "critical": 400},
+    "wildfire": {"low": 15, "medium": 30, "high": 60, "critical": 120},
+}
+_exposure_json = os.getenv("ARES_DIGITAL_TWIN_EXPOSURE_THRESHOLDS_KM", "").strip()
+try:
+    ARES_DIGITAL_TWIN_EXPOSURE_THRESHOLDS_KM = json.loads(_exposure_json) if _exposure_json else _default_exposure_thresholds
+    if not isinstance(ARES_DIGITAL_TWIN_EXPOSURE_THRESHOLDS_KM, dict):
+        raise ValueError
+    for _kind, _bands in ARES_DIGITAL_TWIN_EXPOSURE_THRESHOLDS_KM.items():
+        if not isinstance(_bands, dict) or any(
+            band not in {"low", "medium", "high", "critical"}
+            or not isinstance(distance, (int, float)) or isinstance(distance, bool)
+            or not math.isfinite(distance) or distance < 0 or distance > 5000
+            for band, distance in _bands.items()
+        ):
+            raise ValueError
+except (TypeError, ValueError, OverflowError, json.JSONDecodeError) as exc:
+    raise ImproperlyConfigured("ARES_DIGITAL_TWIN_EXPOSURE_THRESHOLDS_KM must be a JSON object of nonnegative km values by severity.") from exc
