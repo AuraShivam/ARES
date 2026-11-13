@@ -123,6 +123,7 @@ REST_FRAMEWORK = {
         "auth_login": "10/hour",
         "ares_agent_execution": "5/hour",
         "predictive_evaluation": "2/hour",
+        "shipment_prediction_capture": "30/hour",
     },
 }
 ARES_API_TOKEN_TTL_HOURS = max(1, int(os.getenv("ARES_API_TOKEN_TTL_HOURS", "8")))

@@ -11,7 +11,7 @@ from .models import (
     AuditEvent, Disruption, Inventory, InventoryMovement, Material, PurchaseOrder,
     NotificationDelivery, PurchaseOrderLine, ResponseAction, ResponseActionExecution,
     ResponsePlan, RiskAlert, RiskAssessmentSnapshot, RiskOutcome, Shipment, Supplier, Warehouse,
-    PredictiveEvaluationRun,
+    PredictiveEvaluationRun, ResponsePlanEffectivenessReview, ShipmentRiskPredictionSnapshot,
 )
 
 
@@ -254,6 +254,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 delivery_outcome_verified_at=None,
                 delivery_outcome_verified_by="",
                 delivery_outcome_evidence="",
+                delivery_outcome_intervention="unknown",
+                delivery_outcome_response_plan=None,
                 updated_at=timezone.now(),
             )
         return instance
@@ -323,6 +325,7 @@ class ShipmentSerializer(serializers.ModelSerializer):
             "source_name", "source_key", "source_updated_at", "actual_delivery_date",
             "delivery_outcome_verified", "delivery_outcome_verified_at",
             "delivery_outcome_verified_by", "delivery_outcome_evidence",
+            "delivery_outcome_intervention", "delivery_outcome_response_plan",
         )
 
     def validate(self, attrs):
@@ -357,12 +360,16 @@ class ShipmentSerializer(serializers.ModelSerializer):
             instance.delivery_outcome_verified_at = None
             instance.delivery_outcome_verified_by = ""
             instance.delivery_outcome_evidence = ""
+            instance.delivery_outcome_intervention = "unknown"
+            instance.delivery_outcome_response_plan = None
         return super().update(instance, validated_data)
 
 
 class DeliveryOutcomeVerificationSerializer(serializers.Serializer):
     actual_delivery_date = serializers.DateField()
     evidence_notes = serializers.CharField(max_length=10000, allow_blank=False, trim_whitespace=True)
+    intervention_status = serializers.ChoiceField(choices=Shipment.OUTCOME_INTERVENTION, default="unknown")
+    response_plan_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class DisruptionSerializer(serializers.ModelSerializer):
@@ -420,7 +427,48 @@ class PredictiveEvaluationRunSerializer(serializers.ModelSerializer):
 class RiskOutcomeUpsertSerializer(serializers.Serializer):
     disruption_id = serializers.UUIDField()
     outcome = serializers.ChoiceField(choices=RiskOutcome.OUTCOMES)
-    evidence_notes = serializers.CharField(required=False, allow_blank=True, max_length=10000)
+    evidence_notes = serializers.CharField(max_length=10000, allow_blank=False, trim_whitespace=True)
+    assessment_snapshot_id = serializers.UUIDField(required=False, allow_null=True)
+    response_plan_id = serializers.UUIDField(required=False, allow_null=True)
+    intervention_status = serializers.ChoiceField(choices=RiskOutcome.INTERVENTION, default="unknown")
+
+
+class ResponsePlanEffectivenessRequestSerializer(serializers.Serializer):
+    effectiveness = serializers.ChoiceField(choices=ResponsePlanEffectivenessReview.EFFECTIVENESS)
+    evidence_notes = serializers.CharField(max_length=10000, allow_blank=False, trim_whitespace=True)
+
+
+class ResponsePlanEffectivenessReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponsePlanEffectivenessReview
+        fields = "__all__"
+        read_only_fields = fields
+
+
+class ShipmentRiskPredictionSnapshotSerializer(serializers.ModelSerializer):
+    captured_by_username = serializers.CharField(source="captured_by.username", read_only=True, default=None)
+    verified_outcome = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ShipmentRiskPredictionSnapshot
+        fields = "__all__"
+        read_only_fields = fields
+
+    def get_verified_outcome(self, obj):
+        shipment = obj.shipment
+        if not shipment or not shipment.delivery_outcome_verified or not shipment.actual_delivery_date:
+            return {"status": "pending"}
+        delay_days = (shipment.actual_delivery_date - obj.eta_at_prediction).days
+        return {
+            "status": "verified",
+            "late": delay_days > 0,
+            "delay_days": max(0, delay_days),
+            "actual_delivery_date": shipment.actual_delivery_date,
+            "verified_at": shipment.delivery_outcome_verified_at,
+            "verified_by": shipment.delivery_outcome_verified_by,
+            "intervention_status": shipment.delivery_outcome_intervention,
+            "response_plan_id": shipment.delivery_outcome_response_plan_id,
+        }
 
 
 class AuditEventSerializer(serializers.ModelSerializer):
@@ -512,14 +560,17 @@ class ResponseActionSerializer(serializers.ModelSerializer):
 class ResponsePlanSerializer(serializers.ModelSerializer):
     disruption_title = serializers.CharField(source="disruption.title", read_only=True)
     disruption_severity = serializers.CharField(source="disruption.severity", read_only=True)
+    assessment_risk_score = serializers.IntegerField(source="assessment_snapshot.risk_score", read_only=True, default=None)
     actions = ResponseActionSerializer(many=True, required=False)
+    latest_effectiveness_review = serializers.SerializerMethodField()
+    effectiveness_review_history = serializers.SerializerMethodField()
 
     class Meta:
         model = ResponsePlan
         fields = "__all__"
         read_only_fields = (
             "id", "created_by", "status", "submitted_at", "reviewed_by", "reviewed_at", "review_notes",
-            "completed_at", "created_at", "updated_at",
+            "assessment_snapshot", "completed_at", "created_at", "updated_at",
         )
 
     def validate(self, attrs):
@@ -533,6 +584,14 @@ class ResponsePlanSerializer(serializers.ModelSerializer):
             if actions is not None and not actions:
                 raise serializers.ValidationError({"actions": "A response plan must keep at least one action item."})
         return attrs
+
+    def get_latest_effectiveness_review(self, obj):
+        review = obj.effectiveness_reviews.first()
+        return ResponsePlanEffectivenessReviewSerializer(review).data if review else None
+
+    def get_effectiveness_review_history(self, obj):
+        reviews = obj.effectiveness_reviews.all()[:5]
+        return ResponsePlanEffectivenessReviewSerializer(reviews, many=True).data
 
     @transaction.atomic
     def create(self, validated_data):

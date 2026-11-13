@@ -19,7 +19,7 @@ from .models import (
     AuditEvent, Disruption, ExternalFeed, ExternalFeedEvent, Inventory, InventoryMovement, Material, PurchaseOrder,
     NotificationDelivery, PurchaseOrderLine, ResponseAction, ResponsePlan,
     ResponseActionExecution, RiskAlert, RiskAssessmentSnapshot, RiskOutcome,
-    Shipment, Supplier, Warehouse,
+    ResponsePlanEffectivenessReview, Shipment, Supplier, Warehouse,
 )
 from .predictive_risk import predictive_risk_report
 from .demand_forecast import demand_forecast_report
@@ -35,6 +35,7 @@ from .serializers import (
     RiskOutcomeUpsertSerializer, NotificationDeliverySerializer,
     DeliveryOutcomeVerificationSerializer,
     ResponseActionExecutionRequestSerializer, ResponseActionExecutionSerializer,
+    ResponsePlanEffectivenessRequestSerializer, ResponsePlanEffectivenessReviewSerializer,
     ReviewNotesSerializer,
     ShipmentSerializer, SupplierSerializer, WarehouseSerializer,
 )
@@ -157,6 +158,15 @@ class ShipmentViewSet(AuditedModelViewSet):
         serializer = DeliveryOutcomeVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         actual_date = serializer.validated_data["actual_delivery_date"]
+        intervention_status = serializer.validated_data["intervention_status"]
+        response_plan_id = serializer.validated_data.get("response_plan_id")
+        response_plan = None
+        if response_plan_id:
+            response_plan = get_object_or_404(ResponsePlan, pk=response_plan_id)
+            if response_plan.disruption.affected_shipment_id != shipment.pk or response_plan.status not in {"active", "completed"}:
+                raise ValidationError({"response_plan_id": "Choose an active or completed plan explicitly linked to this shipment's disruption."})
+        if (intervention_status == "ares_plan") != bool(response_plan):
+            raise ValidationError({"intervention_status": "Link an active or completed ARES response plan when selecting that intervention status."})
         order_date = shipment.purchase_order.ordered_at or shipment.purchase_order.created_at.date()
         if actual_date > timezone.localdate():
             raise ValidationError({"actual_delivery_date": "A verified actual delivery date cannot be in the future."})
@@ -169,9 +179,12 @@ class ShipmentViewSet(AuditedModelViewSet):
         shipment.delivery_outcome_verified_at = timezone.now()
         shipment.delivery_outcome_verified_by = _reviewer_identity(request.user)
         shipment.delivery_outcome_evidence = serializer.validated_data["evidence_notes"]
+        shipment.delivery_outcome_intervention = intervention_status
+        shipment.delivery_outcome_response_plan = response_plan
         shipment.save(update_fields=[
             "actual_delivery_date", "delivery_outcome_verified", "delivery_outcome_verified_at",
-            "delivery_outcome_verified_by", "delivery_outcome_evidence", "updated_at",
+            "delivery_outcome_verified_by", "delivery_outcome_evidence", "delivery_outcome_intervention",
+            "delivery_outcome_response_plan", "updated_at",
         ])
         self._audit(shipment, "update", before=before, after=self._snapshot(shipment))
         return Response(self.get_serializer(shipment).data)
@@ -234,17 +247,21 @@ class NotificationDeliveryViewSet(viewsets.ReadOnlyModelViewSet):
 
 class ResponsePlanViewSet(AuditMixin, mixins.CreateModelMixin, mixins.ListModelMixin,
                           mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
-    queryset = ResponsePlan.objects.select_related("disruption", "created_by").prefetch_related("actions__executions").all()
+    queryset = ResponsePlan.objects.select_related("disruption", "created_by", "assessment_snapshot").prefetch_related(
+        "actions__executions", "effectiveness_reviews__risk_outcome",
+    ).all()
     serializer_class = ResponsePlanSerializer
 
     def get_permissions(self):
-        if self.action in {"approve", "reject"}:
+        if self.action in {"approve", "reject", "review_effectiveness"}:
             return [IsSupplyChainApprover()]
         return super().get_permissions()
 
     @transaction.atomic
     def perform_create(self, serializer):
-        instance = serializer.save(created_by=self.request.user)
+        disruption = serializer.validated_data["disruption"]
+        assessment = RiskAssessmentSnapshot.objects.filter(disruption=disruption).order_by("-created_at").first()
+        instance = serializer.save(created_by=self.request.user, assessment_snapshot=assessment)
         self._audit(instance, "create", after=self._snapshot(instance))
 
     @transaction.atomic
@@ -344,6 +361,36 @@ class ResponsePlanViewSet(AuditMixin, mixins.CreateModelMixin, mixins.ListModelM
             return ["status", "outcome", "completed_at"]
 
         return self._transition_response(pk, transition, "plan_completed", "Response plan was completed with a recorded outcome.")
+
+    @action(detail=True, methods=["post"], url_path="review-effectiveness")
+    @transaction.atomic
+    def review_effectiveness(self, request, pk=None):
+        serializer = ResponsePlanEffectivenessRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        plan = get_object_or_404(ResponsePlan.objects.select_for_update().select_related("disruption", "assessment_snapshot"), pk=pk)
+        if plan.status != "completed":
+            raise ValidationError({"status": "Only a completed response plan can receive an effectiveness review."})
+        action_outcomes = [
+            {"id": str(action.pk), "title": action.title, "status": action.status, "outcome": action.outcome}
+            for action in plan.actions.order_by("position")
+        ]
+        risk_outcome = RiskOutcome.objects.filter(disruption=plan.disruption, response_plan=plan).first()
+        review = ResponsePlanEffectivenessReview.objects.create(
+            response_plan=plan,
+            risk_outcome=risk_outcome,
+            effectiveness=serializer.validated_data["effectiveness"],
+            reviewer=_reviewer_identity(request.user),
+            evidence_notes=serializer.validated_data["evidence_notes"],
+            action_outcomes=action_outcomes,
+            reviewed_at=timezone.now(),
+        )
+        after = json.loads(json.dumps(ResponsePlanEffectivenessReviewSerializer(review).data, cls=DjangoJSONEncoder))
+        AuditEvent.objects.create(
+            entity_type="supply_chain.responseplaneffectivenessreview",
+            entity_id=str(review.pk), action="create", actor=review.reviewer,
+            changes={"before": None, "after": after},
+        )
+        return Response(ResponsePlanEffectivenessReviewSerializer(review).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
@@ -568,6 +615,21 @@ def risk_outcome_upsert(request):
     values = serializer.validated_data
     disruption = get_object_or_404(Disruption, pk=values["disruption_id"])
     reviewer = _reviewer_identity(request.user)
+    assessment_id = values.get("assessment_snapshot_id")
+    if assessment_id:
+        assessment = RiskAssessmentSnapshot.objects.filter(pk=assessment_id, disruption=disruption).first()
+        if assessment is None:
+            raise ValidationError({"assessment_snapshot_id": "Choose an assessment snapshot belonging to the selected disruption."})
+    else:
+        assessment = RiskAssessmentSnapshot.objects.filter(disruption=disruption).order_by("-created_at").first()
+    response_plan_id = values.get("response_plan_id")
+    response_plan = None
+    if response_plan_id:
+        response_plan = ResponsePlan.objects.filter(pk=response_plan_id, disruption=disruption).first()
+        if response_plan is None or response_plan.status not in {"active", "completed"}:
+            raise ValidationError({"response_plan_id": "Choose an active or completed response plan for the selected disruption."})
+    if (values["intervention_status"] == "ares_plan") != bool(response_plan):
+        raise ValidationError({"intervention_status": "Link an active or completed ARES response plan when selecting that intervention status."})
     existing = RiskOutcome.objects.filter(disruption=disruption).first()
     before = (
         json.loads(json.dumps(RiskOutcomeSerializer(existing).data, cls=DjangoJSONEncoder))
@@ -577,6 +639,9 @@ def risk_outcome_upsert(request):
         disruption=disruption,
         defaults={
             "outcome": values["outcome"],
+            "assessment_snapshot": assessment,
+            "response_plan": response_plan,
+            "intervention_status": values["intervention_status"],
             "reviewed_by": reviewer,
             "evidence_notes": values.get("evidence_notes", "").strip(),
             "reviewed_at": timezone.now(),

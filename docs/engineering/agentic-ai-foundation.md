@@ -135,3 +135,27 @@ The digital-twin impact API adds structured `evidence` and canonical `exposure_c
 `POST /api/digital-twin/simulations/` now accepts up to 10 explicit recovery options and optional `ranking_weights`. Supplier alternatives are grounded in approver-verified delivered shipment history; operator options can model inventory redistribution, emergency procurement, and a source-attributed route alternative. Entries with the same `combination_name` are evaluated as one bounded combination, with supplied quantities and limits applied to an isolated scenario projection. The resulting comparison is saved with the simulation and displayed on the Digital Twin page.
 
 This phase is deterministic and advisory. ARES does not infer supplier capacity, current quotes, warehouse demand/capacity, or alternate routes, and it does not execute proposed actions. Missing metrics lower score coverage or remain unavailable. See the [digital twin guide](digital-twin.md#recovery-strategy-comparison) for request fields, scoring policy, evidence rules, and assumptions. Source code is implemented locally; the frontend production build and Python syntax checks pass. Authenticated database-backed runtime verification remains pending in the configured PostgreSQL environment.
+
+## Phase 7: outcome tracking and calibration
+
+Phase 7 preserves the evidence needed to compare a prediction or response with what was later verified. It does not claim causal impact, automatically tune thresholds, or recalibrate production probabilities.
+
+### Shipment prediction snapshots
+
+The dashboard's **Track this prediction** action calls `POST /api/risk/predictive/snapshots/` with a shipment UUID. A snapshot stores the promised ETA, model version and training cutoff, predicted late probability, confidence, conditional delay range, point-in-time features, explanation factors, and shortage outlook. An identical prediction for the same shipment is deduplicated by a content fingerprint so refreshes do not overweight calibration, and a creation event is added to audit history. Changed predictions can create a new snapshot. Authenticated users can capture predictions (limited to 30 captures per hour); approvers can read the latest 100 snapshots using `GET /api/risk/predictive/snapshots/` and optionally filter by `shipment_id`.
+
+The label is read from the shipment's current approver-verified delivery record. Delivery verification requires evidence notes and an explicit intervention attribution (`none`, `ares_plan`, `external`, or `unknown`). Selecting `ares_plan` also requires a linked active or completed plan explicitly connected to the shipment through its disruption. Changing model inputs invalidates the delivery verification, so those labels stop contributing until reviewed again. The original promise saved in the prediction snapshot is used even if the current ETA later changes.
+
+### Reviewed disruption outcomes
+
+`POST /api/risk/outcomes/` accepts `disruption_id`, `outcome`, evidence notes, `assessment_snapshot_id`, and intervention attribution; `response_plan_id` is required when attribution is `ares_plan`. The exact risk assessment must belong to that disruption. The dashboard requires an exact snapshot selection, while API clients that omit it are linked to the latest assessment at write time when one exists. Corrections remain auditable. Legacy labels without a linked snapshot remain visible but are not substituted against a later assessment.
+
+### Response-plan effectiveness
+
+When a response plan is completed, an ARES approver can submit `POST /api/response-plans/<plan-uuid>/review-effectiveness/` with an `effectiveness` value (`prevented_impact`, `reduced_impact`, `no_measurable_effect`, `worsened_impact`, or `unknown`) and required evidence notes. The review records the authenticated reviewer, timestamp, linked verified outcome for the same plan (if one exists), the pre-response assessment score reference, and a snapshot of action statuses/outcomes. Reviews are append-only through the API and corrections create a new review. The response-plan view returns the latest review and up to five reviews of history.
+
+### Reports and interpretation
+
+`GET /api/risk/calibration/` now includes the existing rule-threshold report, shipment prediction outcome summary, and response-effectiveness summary. Shipment metrics include Brier score for all verified tracked outcomes, a separately reported no-intervention Brier score, probability bands and observed late rates for the no-intervention subset, delay-range MAE where available, intervention counts, and pending-label counts. Disruption threshold metrics use only exact-linked labels explicitly marked `none`; intervened, unknown, and legacy-unlinked labels are counted but excluded. The plan report counts each completed plan's latest reviewer entry and action status coverage.
+
+These reports are descriptive summaries of the captured and reviewer-selected data. Small samples, selective capture, missing outcomes, and confounding may skew them. “No intervention” is an explicit reviewer assertion, not an independently observed fact. An approver's effectiveness label is evidence-backed but does not prove the plan caused the result. No model or threshold is automatically adjusted. Phase 7 is implemented in source with additive migration `0017_outcome_tracking`; database-backed verification remains pending until that migration is applied to the configured local PostgreSQL environment.

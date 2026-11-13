@@ -341,7 +341,7 @@ def _material_shortage_forecast(shipment, late_probability, delay_model, deliver
     }
 
 
-def predictive_risk_report(today=None):
+def predictive_risk_report(today=None, shipment_id=None):
     """Train from verified outcomes and score current open shipments on request."""
     today = today or timezone.localdate()
     deliveries = _verified_deliveries()
@@ -408,12 +408,15 @@ def predictive_risk_report(today=None):
         ),
     })
 
-    open_shipments = list(
+    open_shipments_query = (
         Shipment.objects.filter(status__in=["planned", "in_transit", "delayed", "at_risk"], eta__isnull=False)
         .select_related("purchase_order", "purchase_order__supplier")
         .prefetch_related("purchase_order__lines__material")
         .order_by("eta", "reference")
     )
+    if shipment_id:
+        open_shipments_query = open_shipments_query.filter(pk=shipment_id)
+    open_shipments = list(open_shipments_query)
     predictions = []
     for shipment in open_shipments:
         features = _features_for(shipment, valid_deliveries)
@@ -439,6 +442,7 @@ def predictive_risk_report(today=None):
             "expected_delay_range_days": delay_estimate["delay_range_days"] if delay_estimate else None,
             "delay_estimate_is_conditional_on_late_arrival": bool(delay_estimate),
             "material_shortage": shortage,
+            "feature_snapshot": features,
             "factors": _local_factors(classifier, features),
         })
     summary["predictions"] = predictions

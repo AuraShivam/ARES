@@ -191,6 +191,8 @@ class PurchaseOrderLine(TimestampedModel):
 
 class Shipment(SourceTrackedModel):
     STATUS = [("planned", "Planned"), ("in_transit", "In transit"), ("delayed", "Delayed"), ("delivered", "Delivered"), ("at_risk", "At risk")]
+    OUTCOME_INTERVENTION = [("unknown", "Unknown"), ("none", "No intervention"),
+                            ("ares_plan", "ARES response plan applied"), ("external", "External or untracked intervention")]
     reference = models.CharField(max_length=50, unique=True)
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="shipments")
     origin = models.CharField(max_length=120)
@@ -208,6 +210,11 @@ class Shipment(SourceTrackedModel):
     delivery_outcome_verified_at = models.DateTimeField(null=True, blank=True)
     delivery_outcome_verified_by = models.CharField(max_length=150, blank=True)
     delivery_outcome_evidence = models.TextField(blank=True)
+    delivery_outcome_intervention = models.CharField(max_length=12, choices=OUTCOME_INTERVENTION, default="unknown")
+    delivery_outcome_response_plan = models.ForeignKey(
+        "ResponsePlan", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="verified_shipments",
+    )
     status = models.CharField(max_length=20, choices=STATUS, default="planned")
     risk_score = models.PositiveSmallIntegerField(default=10, validators=[MaxValueValidator(100)])
 
@@ -281,6 +288,10 @@ class ResponsePlan(TimestampedModel):
         ("cancelled", "Cancelled"),
     ]
     disruption = models.ForeignKey(Disruption, on_delete=models.PROTECT, related_name="response_plans")
+    assessment_snapshot = models.ForeignKey(
+        "RiskAssessmentSnapshot", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="response_plans",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
         related_name="ares_response_plans",
@@ -536,14 +547,49 @@ class RiskAlert(TimestampedModel):
 
 class RiskOutcome(TimestampedModel):
     OUTCOMES = [("impact", "Confirmed supply-chain impact"), ("no_impact", "No material impact")]
+    INTERVENTION = [("unknown", "Unknown"), ("none", "No intervention"),
+                    ("ares_plan", "ARES response plan applied"), ("external", "External or untracked intervention")]
     disruption = models.OneToOneField(Disruption, on_delete=models.PROTECT, related_name="risk_outcome")
+    assessment_snapshot = models.ForeignKey(
+        RiskAssessmentSnapshot, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="reviewed_outcomes",
+    )
+    response_plan = models.ForeignKey(
+        ResponsePlan, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="reviewed_risk_outcomes",
+    )
     outcome = models.CharField(max_length=12, choices=OUTCOMES)
+    intervention_status = models.CharField(max_length=12, choices=INTERVENTION, default="unknown")
     reviewed_by = models.CharField(max_length=150)
     evidence_notes = models.TextField(blank=True)
     reviewed_at = models.DateTimeField()
 
     class Meta:
         ordering = ["-reviewed_at"]
+
+
+class ResponsePlanEffectivenessReview(TimestampedModel):
+    EFFECTIVENESS = [
+        ("prevented_impact", "Prevented impact"),
+        ("reduced_impact", "Reduced impact"),
+        ("no_measurable_effect", "No measurable effect"),
+        ("worsened_impact", "Impact worsened"),
+        ("unknown", "Effect unknown"),
+    ]
+    response_plan = models.ForeignKey(ResponsePlan, on_delete=models.PROTECT, related_name="effectiveness_reviews")
+    risk_outcome = models.ForeignKey(
+        RiskOutcome, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="effectiveness_reviews",
+    )
+    effectiveness = models.CharField(max_length=24, choices=EFFECTIVENESS)
+    reviewer = models.CharField(max_length=150)
+    evidence_notes = models.TextField()
+    action_outcomes = models.JSONField(default=list, blank=True)
+    reviewed_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-reviewed_at", "-created_at"]
+        indexes = [models.Index(fields=["response_plan", "reviewed_at"], name="plan_effect_review_idx")]
 
 
 class NotificationDelivery(TimestampedModel):
@@ -728,4 +774,65 @@ class PredictiveEvaluationRun(TimestampedModel):
         indexes = [
             models.Index(fields=["model_type", "status"], name="pred_eval_type_status_idx"),
             models.Index(fields=["created_at"], name="pred_eval_created_idx"),
+        ]
+
+
+class ShipmentRiskPredictionSnapshot(TimestampedModel):
+    """Immutable point-in-time shipment prediction retained for later verified scoring."""
+    prediction_fingerprint = models.CharField(max_length=64)
+    shipment = models.ForeignKey(
+        Shipment, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="risk_prediction_snapshots",
+    )
+    shipment_reference = models.CharField(max_length=50)
+    purchase_order_number = models.CharField(max_length=40)
+    supplier_code = models.CharField(max_length=40)
+    supplier_name = models.CharField(max_length=180)
+    eta_at_prediction = models.DateField()
+    model_version = models.CharField(max_length=120)
+    training_cutoff_date = models.DateField()
+    late_probability_percent = models.DecimalField(max_digits=5, decimal_places=1)
+    model_confidence_percent = models.DecimalField(max_digits=5, decimal_places=1)
+    expected_delay_days = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    delay_range_low_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    delay_range_high_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    feature_snapshot = models.JSONField(default=dict, blank=True)
+    factors = models.JSONField(default=list, blank=True)
+    material_shortage = models.JSONField(default=dict, blank=True)
+    captured_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="ares_shipment_prediction_snapshots",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["shipment", "created_at"], name="ship_pred_snap_date_idx"),
+            models.Index(fields=["model_version", "created_at"], name="ship_pred_model_date_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["shipment", "prediction_fingerprint"],
+                name="unique_shipment_pred_hash",
+            ),
+            models.CheckConstraint(
+                condition=Q(late_probability_percent__gte=0, late_probability_percent__lte=100),
+                name="ship_pred_probability_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(model_confidence_percent__gte=0, model_confidence_percent__lte=100),
+                name="ship_pred_confidence_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(expected_delay_days__isnull=True) | Q(expected_delay_days__gte=0),
+                name="ship_pred_delay_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(delay_range_low_days__isnull=True, delay_range_high_days__isnull=True)
+                    | Q(delay_range_low_days__isnull=False, delay_range_high_days__isnull=False,
+                        delay_range_high_days__gte=models.F("delay_range_low_days"))
+                ),
+                name="ship_pred_delay_range_valid",
+            ),
         ]

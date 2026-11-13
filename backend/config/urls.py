@@ -10,6 +10,7 @@ from supply_chain.agents.api import (
 )
 from supply_chain.digital_twin import api as digital_twin_api
 from supply_chain.predictive_evaluation_api import predictive_evaluation_detail, predictive_evaluations
+from supply_chain.outcome_tracking import shipment_prediction_snapshots
 from supply_chain.views import (
     AuditEventViewSet, DisruptionViewSet, InventoryMovementViewSet, InventoryViewSet,
     MaterialViewSet, NotificationDeliveryViewSet, PurchaseOrderLineViewSet, PurchaseOrderViewSet,
@@ -75,6 +76,7 @@ urlpatterns = [
     path("api/risk/outcomes/", risk_outcome_upsert, name="risk-outcome-upsert"),
     path("api/risk/calibration/", risk_calibration, name="risk-calibration"),
     path("api/risk/predictive/", predictive_risk, name="risk-predictive"),
+    path("api/risk/predictive/snapshots/", shipment_prediction_snapshots, name="shipment-prediction-snapshots"),
     path("api/health/", health, name="health"),
 ]
 

@@ -4,11 +4,14 @@ import os
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import OuterRef, Subquery
+from django.db.models import Count, OuterRef, Subquery
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from .models import AuditEvent, Disruption, RiskAlert, RiskAssessmentSnapshot, RiskOutcome
+from .models import (
+    AuditEvent, Disruption, ResponseAction, ResponsePlan, ResponsePlanEffectivenessReview,
+    RiskAlert, RiskAssessmentSnapshot, RiskOutcome, Shipment, ShipmentRiskPredictionSnapshot,
+)
 from .notifications import queue_risk_alert_notification
 from .risk import assess
 
@@ -36,29 +39,32 @@ def risk_configuration():
 
 
 def risk_calibration_report():
-    """Compare the latest score per disruption with approver-entered outcomes."""
+    """Compare point-linked risk/prediction snapshots with reviewed outcomes."""
     configuration = risk_configuration()
-    latest = RiskAssessmentSnapshot.objects.filter(
-        disruption_id=OuterRef("disruption_id"),
-    ).order_by("-created_at")
-    labels = RiskOutcome.objects.annotate(
-        latest_score=Subquery(latest.values("risk_score")[:1]),
-        latest_band=Subquery(latest.values("risk_band")[:1]),
-    ).values("outcome", "latest_score", "latest_band")
+    labels = RiskOutcome.objects.select_related("assessment_snapshot").values(
+        "outcome", "intervention_status", "assessment_snapshot__risk_score",
+        "assessment_snapshot__risk_band",
+    )
     by_band = {}
     confusion = {"true_positive": 0, "false_positive": 0, "true_negative": 0, "false_negative": 0}
     labeled_without_assessment = 0
+    intervention_breakdown = {key: 0 for key, _label in RiskOutcome.INTERVENTION}
     sample_count = 0
     for row in labels.iterator():
         sample_count += 1
-        if row["latest_score"] is None:
+        intervention_breakdown[row["intervention_status"]] += 1
+        score = row["assessment_snapshot__risk_score"]
+        band = row["assessment_snapshot__risk_band"]
+        if score is None:
             labeled_without_assessment += 1
             continue
-        band = row["latest_band"] or "unknown"
+        if row["intervention_status"] != "none":
+            continue
+        band = band or "unknown"
         bucket = by_band.setdefault(band, {"confirmed_impact": 0, "no_material_impact": 0})
         positive = row["outcome"] == "impact"
         bucket["confirmed_impact" if positive else "no_material_impact"] += 1
-        predicted_positive = row["latest_score"] >= configuration["alert_score_threshold"]
+        predicted_positive = score >= configuration["alert_score_threshold"]
         confusion[
             ("true_positive" if positive else "false_positive")
             if predicted_positive
@@ -74,17 +80,130 @@ def risk_calibration_report():
     false_positive = confusion["false_positive"]
     false_negative = confusion["false_negative"]
     return {
-        "method": "descriptive comparison of the latest assessment per disruption against approver-reviewed outcomes",
+        "method": "descriptive comparison of the exact linked pre-response assessment snapshot against an approver-reviewed outcome; latest assessments are never substituted",
         "is_empirically_calibrated": False,
         "alert_score_threshold": configuration["alert_score_threshold"],
         "labeled_cases": sample_count,
         "assessed_labeled_cases": assessed_labeled,
         "labeled_without_assessment": labeled_without_assessment,
+        "intervention_breakdown": intervention_breakdown,
+        "intervened_or_unknown_labels_excluded_from_threshold_metrics": sum(
+            count for status_key, count in intervention_breakdown.items() if status_key != "none"
+        ),
         "by_risk_band": by_band,
         "threshold_confusion_matrix": confusion,
         "precision_percent": round(true_positive * 100 / (true_positive + false_positive), 1) if true_positive + false_positive else None,
         "recall_percent": round(true_positive * 100 / (true_positive + false_negative), 1) if true_positive + false_negative else None,
-        "limitations": "This report describes the entered labels; sample sizes may be small and scoring rules are not trained or auto-adjusted.",
+        "limitations": "Only exact-linked labels explicitly reviewed as having no intervention enter threshold metrics. Other labels are counted separately because mitigations can alter realized impact. Metrics are descriptive; small samples and selection bias remain, and scoring rules are not trained or auto-adjusted.",
+        "shipment_prediction_calibration": shipment_prediction_calibration_report(),
+        "response_effectiveness": response_effectiveness_report(),
+    }
+
+
+def shipment_prediction_calibration_report():
+    snapshots = ShipmentRiskPredictionSnapshot.objects.select_related("shipment").all()
+    tracked_count = snapshots.count()
+    probability_bins = [(0, 20), (20, 40), (40, 60), (60, 80), (80, 101)]
+    by_probability = {f"{low}-{min(high, 100)}": {"predictions": 0, "late_outcomes": 0,
+                                                  "mean_predicted_late_percent": None,
+                                                  "observed_late_percent": None,
+                                                  "_probability_total": 0.0}
+                      for low, high in probability_bins}
+    verified_count = 0
+    pending_count = 0
+    no_intervention_count = 0
+    intervention_counts = {key: 0 for key, _label in Shipment.OUTCOME_INTERVENTION}
+    all_errors = []
+    unmitigated_errors = []
+    delay_range_errors = []
+    model_versions = set()
+    for snapshot in snapshots.iterator():
+        model_versions.add(snapshot.model_version)
+        shipment = snapshot.shipment
+        if not shipment or not shipment.delivery_outcome_verified or not shipment.actual_delivery_date:
+            pending_count += 1
+            continue
+        verified_count += 1
+        intervention = shipment.delivery_outcome_intervention
+        intervention_counts[intervention] += 1
+        actual_late = int(shipment.actual_delivery_date > snapshot.eta_at_prediction)
+        probability = float(snapshot.late_probability_percent) / 100
+        error = (probability - actual_late) ** 2
+        all_errors.append(error)
+        if intervention != "none":
+            continue
+        no_intervention_count += 1
+        delay_days = max(0, (shipment.actual_delivery_date - snapshot.eta_at_prediction).days)
+        bucket_key = next(f"{low}-{min(high, 100)}" for low, high in probability_bins
+                          if low <= float(snapshot.late_probability_percent) < high)
+        bucket = by_probability[bucket_key]
+        bucket["predictions"] += 1
+        bucket["late_outcomes"] += actual_late
+        bucket["_probability_total"] += float(snapshot.late_probability_percent)
+        unmitigated_errors.append(error)
+        if actual_late and snapshot.delay_range_low_days is not None and snapshot.delay_range_high_days is not None:
+            midpoint = (snapshot.delay_range_low_days + snapshot.delay_range_high_days) / 2
+            delay_range_errors.append(abs(delay_days - midpoint))
+
+    for bucket in by_probability.values():
+        count = bucket["predictions"]
+        bucket["mean_predicted_late_percent"] = round(bucket.pop("_probability_total") / count, 1) if count else None
+        bucket["observed_late_percent"] = round(bucket["late_outcomes"] * 100 / count, 1) if count else None
+    return {
+        "tracked_snapshots": tracked_count,
+        "verified_outcomes": verified_count,
+        "pending_outcomes": pending_count,
+        "no_intervention_verified_outcomes": no_intervention_count,
+        "intervention_breakdown": intervention_counts,
+        "brier_score_all_verified": round(sum(all_errors) / len(all_errors), 4) if all_errors else None,
+        "brier_score_no_intervention": round(sum(unmitigated_errors) / len(unmitigated_errors), 4) if unmitigated_errors else None,
+        "by_probability_band_no_intervention": by_probability,
+        "delay_range_mae_days_no_intervention": round(sum(delay_range_errors) / len(delay_range_errors), 2) if delay_range_errors else None,
+        "delay_range_scored_outcomes": len(delay_range_errors),
+        "model_versions": sorted(model_versions),
+        "limitations": "Brier scores and observed rates are retrospective summaries of captured predictions. The no-intervention subset is reviewer-labeled and may be small; outcomes after an intervention are reported separately and are not used in that subset. No automatic probability recalibration occurs.",
+    }
+
+
+def response_effectiveness_report():
+    latest_review = ResponsePlanEffectivenessReview.objects.filter(
+        response_plan_id=OuterRef("pk"),
+    ).order_by("-reviewed_at", "-created_at").values("pk")[:1]
+    completed_plans = ResponsePlan.objects.filter(status="completed").annotate(
+        latest_review_id=Subquery(latest_review),
+    )
+    completed_count = completed_plans.count()
+    latest_ids = list(completed_plans.exclude(latest_review_id__isnull=True).values_list("latest_review_id", flat=True))
+    reviews = list(ResponsePlanEffectivenessReview.objects.filter(pk__in=latest_ids).select_related(
+        "response_plan__assessment_snapshot", "risk_outcome",
+    ))
+    by_effectiveness = {key: 0 for key, _label in ResponsePlanEffectivenessReview.EFFECTIVENESS}
+    for review in reviews:
+        by_effectiveness[review.effectiveness] += 1
+    actions = ResponseAction.objects.filter(plan__status__in=("approved", "active", "completed"))
+    action_counts = {row["status"]: row["total"] for row in actions.values("status").annotate(total=Count("id"))}
+    action_total = sum(action_counts.values())
+    action_completed = action_counts.get("completed", 0)
+    linked_scores = [review.response_plan.assessment_snapshot.risk_score for review in reviews
+                     if review.response_plan.assessment_snapshot_id]
+    linked_outcomes = {"impact": 0, "no_impact": 0}
+    for review in reviews:
+        if review.risk_outcome_id:
+            linked_outcomes[review.risk_outcome.outcome] += 1
+    return {
+        "completed_response_plans": completed_count,
+        "effectiveness_reviewed_plans": len(reviews),
+        "completed_plans_without_review": max(0, completed_count - len(reviews)),
+        "latest_review_by_effectiveness": by_effectiveness,
+        "action_items_by_status": action_counts,
+        "action_items_total": action_total,
+        "action_items_completed": action_completed,
+        "action_completion_percent": round(action_completed * 100 / action_total, 1) if action_total else None,
+        "reviews_linked_to_pre_response_assessment": len(linked_scores),
+        "mean_pre_response_risk_score": round(sum(linked_scores) / len(linked_scores), 1) if linked_scores else None,
+        "reviews_linked_to_verified_risk_outcome": sum(linked_outcomes.values()),
+        "linked_risk_outcomes": linked_outcomes,
+        "limitations": "Effectiveness is an approver's evidence-backed assessment, not proof that a plan caused the result. Counts use each completed plan's latest review; action completion is operational tracking, not an effectiveness measure.",
     }
 
 

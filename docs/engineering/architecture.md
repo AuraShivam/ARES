@@ -34,6 +34,8 @@ Browser
 | `backend/supply_chain/demand_forecast.py` | Experimental per-material demand forecasts and advisory stock planning |
 | `backend/supply_chain/predictive_evaluation.py` | Chronological shipment/demand backtests, baseline comparisons, calibration diagnostics, and persisted evaluation runs |
 | `backend/supply_chain/predictive_evaluation_api.py` | Authenticated, rate-limited evaluation run and history endpoints |
+| `backend/supply_chain/outcome_tracking.py` | Persisted, deduplicated point-in-time shipment predictions and approver-visible outcome history |
+| `backend/supply_chain/risk_workflow.py` | Exact-snapshot disruption evaluation, shipment prediction scoring, response-effectiveness reporting, and alert maintenance |
 | `backend/supply_chain/digital_twin/` | Database-derived graph, GeoJSON, impact propagation, health KPIs, and isolated what-if scenarios |
 | `backend/supply_chain/agents/` | Bounded specialist and sequential coordinator workflows, OpenAI Responses provider adapter, validated structured output, and role-scoped read-only tools |
 | `backend/supply_chain/agentic_data_readiness.py` | Read-only operational-data coverage report used to show prerequisites, missing evidence, and whether agent-provider configuration is present |

@@ -14,6 +14,7 @@ Any non-terminal state → Cancelled with a reason
 - The authenticated reviewer identity and decision are recorded for approval or rejection. Only staff accounts or members of the `ares_approvers` group can approve or reject. Rejected plans can be edited and resubmitted.
 - Work cannot start before approval. Action items can only be updated after the plan starts.
 - Completed action items require an outcome. A plan can be completed only after each action is completed or cancelled and an overall outcome is recorded.
+- Creating a plan stores a link to the risk assessment available at that time. On completion, an ARES approver can add an evidence-backed effectiveness review. Each review keeps the linked pre-response assessment, an exact linked risk outcome when one was attributed to that plan, and a snapshot of action statuses and outcomes. Reviews append to history; they do not overwrite earlier reviews.
 - Plans can be cancelled from any non-terminal state with a reason. Completed and cancelled plans are retained.
 - Editing plan details or replacing its action list is limited to drafts and rejected plans. Once approved, task titles, owners, and dates are locked; active action status and outcome remain editable.
 - Submitting a plan queues email to active `ares_approvers`/staff with an email address and the plan creator. Decisions and action updates queue email to the plan creator and configured operations recipients; an action owner is also notified when the owner field contains a valid email address. Risk alert open, escalation, and clear events use the same outbox. `GET /api/notifications/` lets a recipient or approver inspect delivery state.
@@ -47,12 +48,15 @@ Any non-terminal state → Cancelled with a reason
 - `POST /api/response-plans/<plan-uuid>/reject/` expects a required `review_notes` reason; the authenticated reviewer is recorded automatically.
 - `POST /api/response-plans/<plan-uuid>/start/` starts an approved plan.
 - `POST /api/response-plans/<plan-uuid>/complete/` expects a required overall `outcome` after all action items are completed or cancelled.
+- `POST /api/response-plans/<plan-uuid>/review-effectiveness/` is approver-only and available after completion. It requires an `effectiveness` value (`prevented_impact`, `reduced_impact`, `no_measurable_effect`, `worsened_impact`, or `unknown`) and non-empty `evidence_notes`. The returned plan includes its latest review and up to five review-history entries.
 - `POST /api/response-plans/<plan-uuid>/cancel/` expects a required `reason`.
 - `GET /api/response-actions/` and `GET/PATCH /api/response-actions/<action-uuid>/` list or update action items. Active plans accept status/outcome changes; valid action statuses are pending, in progress, blocked, completed, and cancelled.
 - `POST /api/response-actions/<action-uuid>/execute/` requires an `Idempotency-Key` header and accepts `{ "dry_run": true }` (default). Set `dry_run` to `false` only for an approver-authorized live webhook execution. Reuse the same key for retries of the same request (up to three total attempts); a key cannot be reused for different action data.
 - `GET /api/notifications/` lists delivery records for the signed-in recipient; staff and approvers can inspect the outbox.
 
 To deliver queued email, configure SMTP/provider environment variables and recipients in the backend environment, enable `ARES_EMAIL_DELIVERY_ENABLED=true`, then run `python manage.py dispatch_notifications`. The command is suitable for a scheduled worker; hosted scheduling and monitoring remain Phase 8 deployment work.
+
+`GET /api/risk/calibration/` summarizes the latest reviewed effectiveness label for completed plans and the status of action items. These measures show review coverage and recorded outcomes; they do not establish that a plan caused an observed result. Review evidence should explain the source and timing of observed effects.
 
 For a live webhook, configure `ARES_ACTION_WEBHOOK_URL`, `ARES_ACTION_WEBHOOK_ALLOWED_HOSTS`, and optionally `ARES_ACTION_WEBHOOK_TOKEN`, then explicitly enable `ARES_ACTION_EXECUTION_ENABLED=true`. Keep the token only in the ignored local `.env` or deployment secret store. Never put credentials in the action JSON payload.
 

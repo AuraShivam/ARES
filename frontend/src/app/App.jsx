@@ -27,7 +27,7 @@ function App() {
   const [overview, setOverview] = useState(null)
   const [apiHealth, setApiHealth] = useState(null)
   const [feedStatus, setFeedStatus] = useState(null)
-  const [riskData, setRiskData] = useState({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
+  const [riskData, setRiskData] = useState({ assessments: [], alerts: [], disruptions: [], outcomes: [], plans: [], policy: null, calibration: null, predictive: null, shipments: [] })
   const [demandData, setDemandData] = useState(null)
   const [mapData, setMapData] = useState(null)
   const [digitalTwinData, setDigitalTwinData] = useState(null)
@@ -56,7 +56,7 @@ function App() {
       setApiHealth(null)
       setRecords([])
       setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
-      setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
+      setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], plans: [], policy: null, calibration: null, predictive: null, shipments: [] })
       setDemandData(null)
       setMapData(null)
       setDigitalTwinData(null)
@@ -102,7 +102,7 @@ function App() {
         ])
         setHomeData({ disruptions: rowsFrom(disruptions), shipments: rowsFrom(shipments), inventory: rowsFrom(inventory), riskAlerts: rowsFrom(riskAlerts) })
       } else if (section === 'risk-intelligence') {
-        const [assessments, alerts, disruptions, policy, calibration, outcomes, predictive, shipments] = await Promise.all([
+        const [assessments, alerts, disruptions, policy, calibration, outcomes, predictive, shipments, plans] = await Promise.all([
           request('/risk/assessments/', { signal }),
           request('/risk/alerts/', { signal }),
           request('/disruptions/', { signal }),
@@ -111,12 +111,14 @@ function App() {
           auth?.is_approver ? request('/risk/outcomes/', { signal }) : Promise.resolve([]),
           request('/risk/predictive/', { signal }),
           request('/shipments/', { signal }),
+          request('/response-plans/', { signal }),
         ])
         setRiskData({
           assessments: rowsFrom(assessments),
           alerts: rowsFrom(alerts),
           disruptions: rowsFrom(disruptions),
           outcomes: rowsFrom(outcomes),
+          plans: rowsFrom(plans),
           policy,
           calibration,
           predictive,
@@ -330,6 +332,24 @@ function App() {
     }
   }
 
+  async function captureShipmentPrediction(shipmentId) {
+    setBusyId(`prediction:${shipmentId}`)
+    setError('')
+    try {
+      const snapshot = await request('/risk/predictive/snapshots/', {
+        method: 'POST', body: JSON.stringify({ shipment_id: shipmentId }),
+      })
+      setNotice(`Prediction snapshot recorded for ${snapshot.shipment_reference}; outcome tracking begins when an approver verifies delivery.`)
+      await refresh()
+      return snapshot
+    } catch (requestError) {
+      setError(requestError.message)
+      return null
+    } finally {
+      setBusyId('')
+    }
+  }
+
   async function verifyShipmentDelivery(shipmentId, payload) {
     setBusyId(shipmentId)
     setError('')
@@ -458,7 +478,7 @@ function App() {
     setApiHealth(null)
     setRecords([])
     setHomeData({ disruptions: [], shipments: [], inventory: [], riskAlerts: [] })
-    setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], policy: null, calibration: null, predictive: null, shipments: [] })
+    setRiskData({ assessments: [], alerts: [], disruptions: [], outcomes: [], plans: [], policy: null, calibration: null, predictive: null, shipments: [] })
     setDemandData(null)
     setMapData(null)
     setDigitalTwinData(null)
@@ -628,7 +648,7 @@ function App() {
           {section === 'overview'
             ? <OverviewPage data={overview} homeData={homeData} loading={loading} apiHealth={apiHealth} refreshState={refreshState} lastUpdatedLabel={lastUpdatedLabel} onNavigate={navigate} onAssess={assessRisk} busyId={busyId} />
             : section === 'risk-intelligence'
-              ? <RiskIntelligencePage data={riskData} loading={loading} canReview={Boolean(auth.is_approver)} onSubmitOutcome={saveRiskOutcome} onVerifyDelivery={verifyShipmentDelivery} savingId={busyId} />
+              ? <RiskIntelligencePage data={riskData} loading={loading} canReview={Boolean(auth.is_approver)} onSubmitOutcome={saveRiskOutcome} onVerifyDelivery={verifyShipmentDelivery} onCapturePrediction={captureShipmentPrediction} savingId={busyId} />
             : section === 'demand-planning'
               ? <DemandPlanningPage data={demandData} loading={loading} />
             : section === 'network-map'

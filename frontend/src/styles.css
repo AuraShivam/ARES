@@ -609,6 +609,11 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .predictive-factors summary { color: #087e76; cursor: pointer; font-weight: 700; }
 .predictive-factors ul { display: grid; gap: 5px; margin: 7px 0 0; padding-left: 17px; }
 .predictive-factors li strong { color: #43595d; }
+.prediction-capture-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding-top: 9px; border-top: 1px solid #e8efed; }
+.prediction-capture-control small { color: #78898b; font-size: 8px; line-height: 1.45; }
+.risk-effectiveness-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.risk-effectiveness-list > span { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #e8efed; border-radius: 999px; background: #fbfdfc; color: #77878a; font-size: 8px; }
+.risk-effectiveness-list strong { color: #3b565a; font-size: 9px; }
 .predictive-lower-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; padding-top: 8px; border-top: 1px solid #edf1f0; }
 .predictive-trends { min-width: 0; }
 .predictive-trends .panel-heading { margin: 0; }

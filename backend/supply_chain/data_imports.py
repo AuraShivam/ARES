@@ -402,6 +402,8 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
             candidate.delivery_outcome_verified_at = None
             candidate.delivery_outcome_verified_by = ""
             candidate.delivery_outcome_evidence = ""
+            candidate.delivery_outcome_intervention = "unknown"
+            candidate.delivery_outcome_response_plan = None
     else:
         _set_value(candidate, row, "title", "title", errors, required=True)
         _set_value(candidate, row, "disruption_type", "disruption_type", errors)
@@ -615,6 +617,8 @@ def _apply_candidate(entity_type, candidate, existing, batch):
                 delivery_outcome_verified_at=None,
                 delivery_outcome_verified_by="",
                 delivery_outcome_evidence="",
+                delivery_outcome_intervention="unknown",
+                delivery_outcome_response_plan=None,
                 updated_at=timezone.now(),
             )
     return candidate

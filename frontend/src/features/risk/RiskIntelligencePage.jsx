@@ -12,11 +12,13 @@ function MetricCard({ label, value, note, tone = 'teal' }) {
   </article>
 }
 
-function DeliveryVerificationForm({ shipments, onSubmit, savingId }) {
+function DeliveryVerificationForm({ shipments, disruptions, plans, onSubmit, savingId }) {
   const eligible = shipments.filter((item) => item.status === 'delivered' && !item.delivery_outcome_verified)
   const [shipmentId, setShipmentId] = useState('')
   const [actualDate, setActualDate] = useState('')
   const [evidenceNotes, setEvidenceNotes] = useState('')
+  const [interventionStatus, setInterventionStatus] = useState('unknown')
+  const [responsePlanId, setResponsePlanId] = useState('')
 
   useEffect(() => {
     if (!eligible.some((item) => item.id === shipmentId)) setShipmentId(eligible[0]?.id || '')
@@ -26,13 +28,20 @@ function DeliveryVerificationForm({ shipments, onSubmit, savingId }) {
   useEffect(() => {
     setActualDate(selected?.actual_delivery_date || '')
     setEvidenceNotes('')
+    setInterventionStatus('unknown')
+    setResponsePlanId('')
   }, [shipmentId, selected?.actual_delivery_date])
+
+  const disruptionIds = disruptions.filter((item) => item.affected_shipment === shipmentId).map((item) => item.id)
+  const relatedPlans = plans.filter((plan) => disruptionIds.includes(plan.disruption) && ['active', 'completed'].includes(plan.status))
 
   async function submit(event) {
     event.preventDefault()
     const saved = await onSubmit(shipmentId, {
       actual_delivery_date: actualDate,
       evidence_notes: evidenceNotes.trim(),
+      intervention_status: interventionStatus,
+      response_plan_id: interventionStatus === 'ares_plan' ? responsePlanId : null,
     })
     if (saved) {
       setActualDate('')
@@ -59,17 +68,31 @@ function DeliveryVerificationForm({ shipments, onSubmit, savingId }) {
           <span className="field-label">Verification evidence</span>
           <textarea maxLength={10000} rows="3" value={evidenceNotes} onChange={(event) => setEvidenceNotes(event.target.value)} placeholder="Reference the receiving record, carrier proof of delivery, or other verified source." required />
         </label>
+        <label className="form-field"><span className="field-label">Intervention before delivery</span>
+          <select value={interventionStatus} onChange={(event) => { setInterventionStatus(event.target.value); setResponsePlanId('') }}>
+            <option value="unknown">Unknown</option><option value="none">No intervention</option><option value="ares_plan">ARES response plan applied</option><option value="external">External or untracked intervention</option>
+          </select>
+        </label>
+        {interventionStatus === 'ares_plan' && <label className="form-field"><span className="field-label">Applied response plan</span>
+          <select required value={responsePlanId} onChange={(event) => setResponsePlanId(event.target.value)}><option value="">Select a linked active/completed plan</option>{relatedPlans.map((plan) => <option value={plan.id} key={plan.id}>{plan.title}</option>)}</select>
+        </label>}
         <div className="risk-review-actions">
-          <small>Verifying records who delivered the shipment and when is required before training.</small>
-          <button className="primary-button" type="submit" disabled={savingId === shipmentId || !shipmentId || !actualDate || !evidenceNotes.trim()}>{savingId === shipmentId ? 'Saving…' : 'Verify delivery'}</button>
+          <small>Only verified outcomes train or calibrate the delay model. Attribute interventions so mitigated outcomes are not treated as unmitigated predictions.</small>
+          <button className="primary-button" type="submit" disabled={savingId === shipmentId || !shipmentId || !actualDate || !evidenceNotes.trim() || (interventionStatus === 'ares_plan' && !responsePlanId)}>{savingId === shipmentId ? 'Saving…' : 'Verify delivery'}</button>
         </div>
       </form>}
   </section>
 }
 
-function PredictiveRiskPanel({ report, shipments, loading, canReview, onVerifyDelivery, savingId }) {
+function PredictiveRiskPanel({ report, shipments, disruptions, plans, loading, canReview, onVerifyDelivery, onCapturePrediction, savingId }) {
   const predictions = report?.predictions || []
   const trends = report?.supplier_trends || []
+  const [capturedSnapshots, setCapturedSnapshots] = useState({})
+
+  async function capturePrediction(shipmentId) {
+    const saved = await onCapturePrediction(shipmentId)
+    if (saved) setCapturedSnapshots((current) => ({ ...current, [shipmentId]: saved.id }))
+  }
   return <section className="panel predictive-risk-panel">
     <div className="panel-heading">
       <div><p className="eyebrow">PREDICTIVE SUPPLY-CHAIN RISK</p><h2>Shipment delay outlook</h2><p>Trained only from verified historical shipment dates.</p></div>
@@ -105,6 +128,12 @@ function PredictiveRiskPanel({ report, shipments, loading, canReview, onVerifyDe
                 <summary>Material stock-cover detail</summary>
                 <ul>{item.material_shortage.materials.map((material) => <li key={material.material_sku}><strong>{material.material_sku}</strong>: {material.estimated_stock_cover_days == null ? material.estimate_note : `${material.estimated_stock_cover_days} days of estimated cover`}{material.baseline_shortage_before_eta ? ' · stock may run out before the promised arrival' : ''}</li>)}</ul>
               </details>}
+              <div className="prediction-capture-control">
+                <button type="button" className="secondary-button" onClick={() => capturePrediction(item.shipment_id)} disabled={savingId === `prediction:${item.shipment_id}` || Boolean(capturedSnapshots[item.shipment_id])}>
+                  {savingId === `prediction:${item.shipment_id}` ? 'Recording…' : capturedSnapshots[item.shipment_id] ? 'Prediction snapshot recorded' : 'Track this prediction'}
+                </button>
+                {capturedSnapshots[item.shipment_id] && <small>Saved snapshot {capturedSnapshots[item.shipment_id].slice(0, 8)}. Its score will be compared after delivery is verified.</small>}
+              </div>
             </article>)}</div>}
         <p className="risk-report-note">{report?.limitations || 'Model probabilities are experimental and require review.'} Confidence is the model’s maximum class probability, not a calibrated guarantee.</p>
         <div className="predictive-lower-grid">
@@ -119,14 +148,14 @@ function PredictiveRiskPanel({ report, shipments, loading, canReview, onVerifyDe
               </article>)}</div>}
           </section>
           {canReview
-            ? <DeliveryVerificationForm shipments={shipments} onSubmit={onVerifyDelivery} savingId={savingId} />
+            ? <DeliveryVerificationForm shipments={shipments} disruptions={disruptions} plans={plans} onSubmit={onVerifyDelivery} savingId={savingId} />
             : <section className="panel risk-review-panel"><div className="panel-heading"><div><p className="eyebrow">VERIFIED TRAINING DATA</p><h2>Review delivery outcomes</h2><p>Only ARES approvers can verify delivery outcomes.</p></div></div><div className="risk-data-note">An approver must confirm actual delivery dates and evidence before records enter the model's training set.</div></section>}
         </div>
       </>}
   </section>
 }
 
-function OutcomeForm({ disruptions, assessments, outcomes, onSubmit, saving }) {
+function OutcomeForm({ disruptions, assessments, outcomes, plans, onSubmit, saving }) {
   const assessedDisruptions = useMemo(() => {
     const ids = new Set(assessments.map((item) => item.disruption))
     return disruptions.filter((item) => ids.has(item.id))
@@ -138,16 +167,25 @@ function OutcomeForm({ disruptions, assessments, outcomes, onSubmit, saving }) {
   const [disruptionId, setDisruptionId] = useState('')
   const [outcome, setOutcome] = useState('')
   const [evidenceNotes, setEvidenceNotes] = useState('')
+  const [assessmentSnapshotId, setAssessmentSnapshotId] = useState('')
+  const [interventionStatus, setInterventionStatus] = useState('unknown')
+  const [responsePlanId, setResponsePlanId] = useState('')
 
   useEffect(() => {
     if (!disruptionId && assessedDisruptions.length) setDisruptionId(assessedDisruptions[0].id)
   }, [assessedDisruptions, disruptionId])
 
   const latestOutcome = outcomesByDisruption.get(disruptionId)
+  const selectedAssessments = assessments.filter((item) => item.disruption === disruptionId)
+  const relatedPlans = plans.filter((plan) => plan.disruption === disruptionId && ['active', 'completed'].includes(plan.status))
   useEffect(() => {
     setOutcome(latestOutcome?.outcome || '')
     setEvidenceNotes(latestOutcome?.evidence_notes || '')
-  }, [disruptionId, latestOutcome?.outcome, latestOutcome?.evidence_notes])
+    setAssessmentSnapshotId(latestOutcome?.assessment_snapshot || selectedAssessments[0]?.id || '')
+    setInterventionStatus(latestOutcome?.intervention_status || 'unknown')
+    setResponsePlanId(latestOutcome?.response_plan || '')
+  }, [disruptionId, latestOutcome?.outcome, latestOutcome?.evidence_notes, latestOutcome?.assessment_snapshot,
+    latestOutcome?.intervention_status, latestOutcome?.response_plan, selectedAssessments[0]?.id])
 
   async function submit(event) {
     event.preventDefault()
@@ -155,6 +193,9 @@ function OutcomeForm({ disruptions, assessments, outcomes, onSubmit, saving }) {
       disruption_id: disruptionId,
       outcome,
       evidence_notes: evidenceNotes.trim(),
+      assessment_snapshot_id: assessmentSnapshotId || null,
+      intervention_status: interventionStatus,
+      response_plan_id: interventionStatus === 'ares_plan' ? responsePlanId : null,
     })
     if (saved) {
       setOutcome('')
@@ -181,6 +222,12 @@ function OutcomeForm({ disruptions, assessments, outcomes, onSubmit, saving }) {
           </select>
         </label>
         <label className="form-field">
+          <span className="field-label">Exact assessment being reviewed</span>
+          <select value={assessmentSnapshotId} onChange={(event) => setAssessmentSnapshotId(event.target.value)} required>
+            {selectedAssessments.map((item) => <option key={item.id} value={item.id}>{formatDate(item.created_at, true)} · {humanize(item.trigger)} · score {item.risk_score}</option>)}
+          </select>
+        </label>
+        <label className="form-field">
           <span className="field-label">Verified result</span>
           <select value={outcome} onChange={(event) => setOutcome(event.target.value)} required>
             <option value="">Choose a confirmed result</option>
@@ -192,24 +239,34 @@ function OutcomeForm({ disruptions, assessments, outcomes, onSubmit, saving }) {
           <span className="field-label">Evidence notes</span>
           <textarea maxLength={10000} required rows="3" value={evidenceNotes} onChange={(event) => setEvidenceNotes(event.target.value)} placeholder="Describe the confirmed evidence and its source." />
         </label>
+        <label className="form-field"><span className="field-label">Intervention attribution</span>
+          <select value={interventionStatus} onChange={(event) => { setInterventionStatus(event.target.value); setResponsePlanId('') }}>
+            <option value="unknown">Unknown</option><option value="none">No intervention</option><option value="ares_plan">ARES response plan applied</option><option value="external">External or untracked intervention</option>
+          </select>
+        </label>
+        {interventionStatus === 'ares_plan' && <label className="form-field"><span className="field-label">Applied response plan</span>
+          <select required value={responsePlanId} onChange={(event) => setResponsePlanId(event.target.value)}><option value="">Select a linked active/completed plan</option>{relatedPlans.map((plan) => <option value={plan.id} key={plan.id}>{plan.title}</option>)}</select>
+        </label>}
         {latestOutcome && <p className="risk-correction-note">Last reviewed by {latestOutcome.reviewed_by || 'an ARES approver'} on {formatDate(latestOutcome.reviewed_at, true)}. Saving updates the label and records the correction in audit history.</p>}
         <div className="risk-review-actions">
-          <small>Only ARES approvers can record or correct a label.</small>
-          <button className="primary-button" type="submit" disabled={saving || !disruptionId || !outcome || !evidenceNotes.trim()}>{saving ? 'Saving…' : latestOutcome ? 'Update reviewed outcome' : 'Save reviewed outcome'}</button>
+          <small>Only exact-linked labels marked “No intervention” enter threshold metrics; mitigated or uncertain outcomes remain visible but are excluded.</small>
+          <button className="primary-button" type="submit" disabled={saving || !disruptionId || !assessmentSnapshotId || !outcome || !evidenceNotes.trim() || (interventionStatus === 'ares_plan' && !responsePlanId)}>{saving ? 'Saving…' : latestOutcome ? 'Update reviewed outcome' : 'Save reviewed outcome'}</button>
         </div>
       </form>}
   </section>
 }
 
-export default function RiskIntelligencePage({ data, loading, canReview, onSubmitOutcome, onVerifyDelivery, savingId }) {
+export default function RiskIntelligencePage({ data, loading, canReview, onSubmitOutcome, onVerifyDelivery, onCapturePrediction, savingId }) {
   const calibration = data.calibration || {}
   const byBand = calibration.by_risk_band || {}
+  const shipmentCalibration = calibration.shipment_prediction_calibration || {}
+  const responseEffectiveness = calibration.response_effectiveness || {}
   const activeAlerts = data.alerts.filter((item) => item.status === 'active')
   const assessedDisruptions = new Set(data.assessments.map((item) => item.disruption)).size
   const latestAssessments = data.assessments.slice(0, 8)
 
   return <div className="risk-intelligence-page">
-    <PredictiveRiskPanel report={data.predictive} shipments={data.shipments} loading={loading} canReview={canReview} onVerifyDelivery={onVerifyDelivery} savingId={savingId} />
+    <PredictiveRiskPanel report={data.predictive} shipments={data.shipments} disruptions={data.disruptions} plans={data.plans} loading={loading} canReview={canReview} onVerifyDelivery={onVerifyDelivery} onCapturePrediction={onCapturePrediction} savingId={savingId} />
     <div className="metric-grid">
       <MetricCard label="Alert threshold" value={data.policy?.alert_score_threshold ?? '—'} note="score out of 100" tone="amber" />
       <MetricCard label="Assessed disruptions" value={formatNumber(assessedDisruptions)} note="with saved assessment history" tone="blue" />
@@ -257,6 +314,34 @@ export default function RiskIntelligencePage({ data, loading, canReview, onSubmi
       </section>
     </div>
 
+    <div className="risk-intelligence-grid risk-learning-grid">
+      <section className="panel risk-calibration-panel">
+        <div className="panel-heading"><div><p className="eyebrow">SHIPMENT MODEL OUTCOMES</p><h2>Prediction calibration</h2><p>Captured probabilities compared with later approver-verified delivery dates.</p></div></div>
+        <div className="risk-calibration-metrics">
+          <span><small>Captured predictions</small><strong>{formatNumber(shipmentCalibration.tracked_snapshots)}</strong></span>
+          <span><small>Verified outcomes</small><strong>{formatNumber(shipmentCalibration.verified_outcomes)}</strong></span>
+          <span><small>No-intervention Brier score</small><strong>{shipmentCalibration.brier_score_no_intervention ?? '—'}</strong></span>
+          <span><small>Awaiting verified delivery</small><strong>{formatNumber(shipmentCalibration.pending_outcomes)}</strong></span>
+        </div>
+        {Object.entries(shipmentCalibration.by_probability_band_no_intervention || {}).some(([, row]) => row.predictions > 0)
+          ? <div className="risk-band-table-wrap"><table className="risk-band-table"><thead><tr><th>Predicted band</th><th>Cases</th><th>Mean predicted</th><th>Observed late</th></tr></thead><tbody>{Object.entries(shipmentCalibration.by_probability_band_no_intervention || {}).map(([band, row]) => row.predictions > 0 && <tr key={band}><td>{band}%</td><td>{row.predictions}</td><td>{row.mean_predicted_late_percent}%</td><td>{row.observed_late_percent}%</td></tr>)}</tbody></table></div>
+          : <p className="risk-data-note">No tracked shipment predictions have a verified outcome explicitly attributed to no intervention yet.</p>}
+        <p className="risk-report-note">Observed results after ARES or external intervention are reported separately: {formatNumber(shipmentCalibration.intervention_breakdown?.ares_plan)} ARES plan · {formatNumber(shipmentCalibration.intervention_breakdown?.external)} external/untracked · {formatNumber(shipmentCalibration.intervention_breakdown?.unknown)} unknown. {shipmentCalibration.limitations}</p>
+      </section>
+
+      <section className="panel risk-calibration-panel">
+        <div className="panel-heading"><div><p className="eyebrow">APPROVED RESPONSE FOLLOW-UP</p><h2>Action effectiveness</h2><p>Approver-reviewed outcomes linked to the pre-response risk snapshot and completed action evidence.</p></div></div>
+        <div className="risk-calibration-metrics">
+          <span><small>Completed plans</small><strong>{formatNumber(responseEffectiveness.completed_response_plans)}</strong></span>
+          <span><small>Effectiveness reviewed</small><strong>{formatNumber(responseEffectiveness.effectiveness_reviewed_plans)}</strong></span>
+          <span><small>Action items completed</small><strong>{formatNumber(responseEffectiveness.action_items_completed)} / {formatNumber(responseEffectiveness.action_items_total)}</strong></span>
+          <span><small>Mean linked pre-response risk</small><strong>{responseEffectiveness.mean_pre_response_risk_score ?? '—'}</strong></span>
+        </div>
+        <div className="risk-effectiveness-list">{Object.entries(responseEffectiveness.latest_review_by_effectiveness || {}).map(([key, value]) => <span key={key}><strong>{formatNumber(value)}</strong>{humanize(key)}</span>)}</div>
+        <p className="risk-report-note">Linked verified outcomes: {formatNumber(responseEffectiveness.linked_risk_outcomes?.impact)} impact · {formatNumber(responseEffectiveness.linked_risk_outcomes?.no_impact)} no impact. {responseEffectiveness.limitations}</p>
+      </section>
+    </div>
+
     <div className="risk-intelligence-grid risk-lower-grid">
       <section className="panel risk-assessment-panel">
         <div className="panel-heading"><div><p className="eyebrow">ASSESSMENT HISTORY</p><h2>Latest risk assessments</h2><p>Saved scores retain their evidence snapshot and trigger.</p></div></div>
@@ -275,7 +360,7 @@ export default function RiskIntelligencePage({ data, loading, canReview, onSubmi
       </section>
 
       {canReview
-        ? <OutcomeForm disruptions={data.disruptions} assessments={data.assessments} outcomes={data.outcomes} onSubmit={onSubmitOutcome} saving={Boolean(savingId)} />
+        ? <OutcomeForm disruptions={data.disruptions} assessments={data.assessments} outcomes={data.outcomes} plans={data.plans} onSubmit={onSubmitOutcome} saving={Boolean(savingId)} />
         : <section className="panel risk-review-panel"><div className="panel-heading"><div><p className="eyebrow">APPROVER REVIEW</p><h2>Verified outcomes</h2><p>Outcome labels are restricted to ARES approvers.</p></div></div><div className="risk-data-note">Sign in with an approver account to record or inspect reviewed outcome evidence.</div></section>}
     </div>
   </div>

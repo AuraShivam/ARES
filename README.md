@@ -41,7 +41,7 @@ Risk rules and both ML models provide **advisory** results. Shipment predictions
 | Network overview | Snapshot of operational records, low stock, shipments, disruptions, and active risk alerts |
 | World map | Recorded endpoints, optional supplied shipment routes, and current GDACS event points/polygons with source metadata |
 | Supply chain digital twin | Live dependency graph, geographic locations/hazards, impact reasons, health KPIs, and isolated simulations |
-| Risk intelligence | Explainable disruption assessments and alerts, outcome calibration, and shipment-delay outlook |
+| Risk intelligence | Explainable disruption assessments and alerts, captured shipment prediction outcomes, intervention-aware calibration summaries, and reviewed response-plan effectiveness |
 | Disruptions and response plans | Record disruption events, assign mitigation work, submit plans for approval, and track actions |
 | Shipments and purchase orders | Review delivery commitments, supplier links, purchase-order lines, and shipment status |
 | Inventory and demand planning | Inspect warehouse balances and movement history; review forecast demand, projected stockouts, and reorder advice |

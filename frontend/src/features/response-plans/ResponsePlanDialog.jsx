@@ -90,6 +90,8 @@ export default function ResponsePlanDialog({ planId, currentUser, onClose, onCre
   const [outcome, setOutcome] = useState('')
   const [cancelReason, setCancelReason] = useState('')
   const [actionOutcomes, setActionOutcomes] = useState({})
+  const [effectiveness, setEffectiveness] = useState('unknown')
+  const [effectivenessEvidence, setEffectivenessEvidence] = useState('')
   const [loading, setLoading] = useState(Boolean(planId))
   const [saving, setSaving] = useState(false)
   const [busyAction, setBusyAction] = useState('')
@@ -142,6 +144,24 @@ export default function ResponsePlanDialog({ planId, currentUser, onClose, onCre
       setPlan(updated)
       setOutcome(updated.outcome || '')
       await onChanged(updated)
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function reviewEffectiveness() {
+    setSaving(true)
+    setError('')
+    try {
+      await request(`/response-plans/${plan.id}/review-effectiveness/`, {
+        method: 'POST', body: JSON.stringify({ effectiveness, evidence_notes: effectivenessEvidence.trim() }),
+      })
+      const refreshed = await request(`/response-plans/${plan.id}/`)
+      setPlan(refreshed)
+      setEffectivenessEvidence('')
+      await onChanged(refreshed)
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -254,6 +274,17 @@ export default function ResponsePlanDialog({ planId, currentUser, onClose, onCre
         {plan.status === 'pending_approval' && <div className="response-control-card"><strong>Review decision</strong>{currentUser?.is_approver ? <><p className="reviewer-identity">Decision recorded as {currentUser.display_name || currentUser.username}</p><label className="form-field"><span className="field-label">Review notes</span><textarea rows="2" value={reviewNotes} onChange={(event) => setReviewNotes(event.target.value)} placeholder="Decision context or rejection reason" /></label><div className="response-inline-actions"><button type="button" className="secondary-button" disabled={saving || !reviewNotes.trim()} onClick={() => transition('reject', { review_notes: reviewNotes })}>Reject</button><button type="button" className="primary-button" disabled={saving} onClick={() => transition('approve', { review_notes: reviewNotes })}>Approve</button></div></> : <p className="reviewer-identity">Awaiting review from an ARES approver. You can still view and track this plan.</p>}</div>}
         {plan.status === 'active' && <div className="response-control-card"><strong>Close the response</strong><label className="form-field"><span className="field-label">Outcome</span><textarea rows="2" value={outcome} onChange={(event) => setOutcome(event.target.value)} placeholder="What changed, and was the disruption contained?" /></label><button type="button" className="primary-button" disabled={saving || Boolean(busyAction) || !outcome.trim() || (plan.actions || []).some((item) => !['completed', 'cancelled'].includes(item.status))} onClick={() => transition('complete', { outcome })}>Complete plan</button></div>}
         {plan.outcome && <div className="response-plan-outcome"><strong>{plan.status === 'cancelled' ? 'Cancellation reason' : 'Recorded outcome'}</strong><p>{plan.outcome}</p></div>}
+        {plan.assessment_snapshot && <p className="risk-data-note">This response is linked to pre-response assessment {plan.assessment_snapshot.slice(0, 8)} · risk score {plan.assessment_risk_score ?? '—'}.</p>}
+        {plan.latest_effectiveness_review && <div className="review-record"><strong>Latest effectiveness review · {humanize(plan.latest_effectiveness_review.effectiveness)}</strong><span>{plan.latest_effectiveness_review.reviewer} · {formatDate(plan.latest_effectiveness_review.reviewed_at, true)}</span><p>{plan.latest_effectiveness_review.evidence_notes}</p></div>}
+        {plan.effectiveness_review_history?.length > 1 && <details className="response-outcome-history"><summary>Review history ({plan.effectiveness_review_history.length})</summary>{plan.effectiveness_review_history.slice(1).map((review) => <p key={review.id}>{humanize(review.effectiveness)} · {review.reviewer} · {formatDate(review.reviewed_at, true)} · {review.evidence_notes}</p>)}</details>}
+        {plan.status === 'completed' && currentUser?.is_approver && <div className="response-control-card">
+          <strong>Review plan effectiveness</strong>
+          <p className="reviewer-identity">This review is retained with the completed action outcomes and linked risk snapshot. It is an evidence-backed assessment, not a causal claim.</p>
+          <label className="form-field"><span className="field-label">Observed effect</span><select value={effectiveness} onChange={(event) => setEffectiveness(event.target.value)}><option value="prevented_impact">Prevented impact</option><option value="reduced_impact">Reduced impact</option><option value="no_measurable_effect">No measurable effect</option><option value="worsened_impact">Impact worsened</option><option value="unknown">Effect unknown</option></select></label>
+          <label className="form-field"><span className="field-label">Review evidence</span><textarea required rows="3" maxLength={10000} value={effectivenessEvidence} onChange={(event) => setEffectivenessEvidence(event.target.value)} placeholder="Describe the observed result and the evidence linking it to this plan." /></label>
+          <button type="button" className="primary-button" disabled={saving || !effectivenessEvidence.trim()} onClick={reviewEffectiveness}>{saving ? 'Saving review…' : 'Record effectiveness review'}</button>
+        </div>}
+        {plan.status === 'completed' && !currentUser?.is_approver && !plan.latest_effectiveness_review && <p className="reviewer-identity">Awaiting an ARES approver's evidence-backed effectiveness review.</p>}
         <div className="dialog-actions response-workflow-actions">
           {canEdit && <button type="button" className="secondary-button" onClick={() => setEditing(true)} disabled={saving}>Edit draft</button>}
           {['draft', 'rejected'].includes(plan.status) && <button type="button" className="primary-button" onClick={() => transition('submit')} disabled={saving}>Submit for approval</button>}
