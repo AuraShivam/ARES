@@ -58,19 +58,33 @@ The recommended demo runs on `http://localhost:8080` using Docker Compose, with 
 
 ```text
 .
-├── backend/                 Django REST API, data models, migrations, workers, and ML logic
-├── frontend/                React + Vite dashboard
+├── backend/
+│   ├── config/               Django settings, URL routing, ASGI, and WSGI
+│   └── supply_chain/
+│       ├── agents/            AI-assisted analysis and bounded agent runtime
+│       ├── digital_twin/      Network graph, impact analysis, and simulations
+│       ├── management/
+│       │   └── commands/      Django CLI commands and background workers
+│       ├── migrations/        Versioned PostgreSQL schema changes
+│       └── tests/             Backend behavior and integration tests
+├── frontend/
+│   ├── src/app/              Dashboard shell and application orchestration
+│   ├── src/features/         Feature pages and workflows
+│   ├── src/lib/              Shared API and display helpers
+│   └── tests/                Frontend utility tests
 ├── docs/
-│   ├── engineering/          Architecture, security, and testing guides
-│   ├── operations/           Local demo walkthrough, deployment runbook, and roadmap
-│   ├── product/              Feature and data onboarding guides
-│   └── references/           Historical project documents (local PDFs ignored by Git)
-├── ops/                     PostgreSQL backup and guarded restore scripts
-├── compose.demo.yaml         Local demonstration runtime
-└── compose.production.yaml   Provider-neutral hosted runtime example
+│   ├── engineering/           Architecture, implementation, security, and testing
+│   ├── operations/            Demo, deployment, recovery, and roadmap
+│   ├── product/               Feature behavior and data onboarding
+│   └── references/            Historical project documents
+├── ops/                       PostgreSQL backup and guarded restore scripts
+├── compose.demo.yaml         Local demonstration services
+├── compose.production.yaml   Hosted runtime example
+├── compose.production.ca.example.yaml  Optional TLS proxy example
+└── README.md                 Project overview and entry points
 ```
 
-The ignored `.local/archive/legacy-sap-purchase-order-project/` folder preserves old local SQLite-era files. It is not used by the PostgreSQL-backed ARES app and is not part of the Git repository.
+For the rationale behind these boundaries, what belongs in each area, and how to place future features, see the [repository structure guide](docs/engineering/repository-structure.md). Local-only configuration, caches, build output, and the ignored `.local/archive/legacy-sap-purchase-order-project/` SQLite-era archive are not part of the Git repository.
 
 ## Guides
 
