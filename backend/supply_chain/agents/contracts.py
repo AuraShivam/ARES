@@ -16,6 +16,14 @@ AGENT_IDS = (
     "coordinator",
 )
 
+SPECIALIST_AGENT_IDS = (
+    "risk_intelligence",
+    "supplier_intelligence",
+    "inventory_intelligence",
+    "logistics_intelligence",
+    "procurement_intelligence",
+)
+
 EXECUTION_STATUSES = ("pending", "running", "succeeded", "partial", "failed", "cancelled")
 FINDING_SEVERITIES = ("info", "low", "medium", "high", "critical", "unknown")
 

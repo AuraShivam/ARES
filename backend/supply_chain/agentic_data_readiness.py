@@ -253,7 +253,7 @@ def build_agent_data_readiness(today=None):
             },
             "agent_runtime": {
                 "status": "configured" if agent_runtime_configured else "unavailable",
-                "implementation": "single_agent_runtime_available",
+                "implementation": "bounded_agent_runtime_with_sequential_coordinator",
                 "evidence": {
                     "provider": provider["provider"],
                     "model": provider["model"],
@@ -261,7 +261,7 @@ def build_agent_data_readiness(today=None):
                 },
                 "limitations": [
                     "Configuration status does not verify provider network reachability." if agent_runtime_configured else "The runtime will not execute until provider configuration and external-processing opt-in are complete.",
-                    "Specialist workflows and multi-agent orchestration are Phase 3 work.",
+                    "Coordinator specialists run sequentially and remain advisory; route planning, supplier-alternative optimization, and write actions are not available in this runtime.",
                 ],
             },
         },

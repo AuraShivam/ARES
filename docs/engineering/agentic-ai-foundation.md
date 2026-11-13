@@ -96,19 +96,30 @@ All routes below require an authenticated ARES user.
 | `GET /api/ai/tools/` | Public descriptions of the registered read-only tools. |
 | `GET /api/ai/data-readiness/` | Current operational-data and model-input coverage. |
 | `GET /api/ai/executions/` | The current user's latest 50 execution records. |
-| `POST /api/ai/executions/` | Start one bounded single-agent analysis. Requires an `Idempotency-Key` request header. |
+| `POST /api/ai/executions/` | Start one bounded specialist analysis or coordinator workflow. Requires an `Idempotency-Key` request header. |
 | `GET /api/ai/executions/<uuid>/` | Read one execution owned by the current user. |
 
-The execution POST body is `{ "agent_id": "risk_intelligence", "question": "..." }`. The agent ID must be one of the six role IDs in the shared contract. A repeated key and identical request returns the original result; reusing a key for a different request returns HTTP 409. Each user is limited to five POST attempts per hour. A request can make at most four read-tool calls and uses bounded retries, a 30-second timeout, and a 1,200-token output cap by default; settings clamp these limits to documented safe ranges.
+The execution POST body is `{ "agent_id": "risk_intelligence", "question": "..." }`. The agent ID must be one of the six role IDs in the shared contract. For a coordinated workflow, send `agent_id: "coordinator"` and optionally a `specialists` list containing one or more supported specialist IDs. Omitting the list selects all five when the deployment caps allow it; otherwise, send an explicit subset. A repeated key and identical request returns the original result; reusing a key for a different question or specialist selection returns HTTP 409. Each user is limited to five POST attempts per hour. A direct specialist request can make at most four read-tool calls by default (configurable from one to eight). A coordinated workflow uses one shared timeout (30 seconds by default) and a shared total tool-call budget (12 by default, configurable up to 40), with a maximum of five specialists. The coordinator synthesis stage has no tools. Provider retries and output tokens are also bounded.
 
 ### Tools, data handling, and limits
 
 The registered tools only read ARES data: data readiness, supplier, material, current inventory, shipment, purchase order, disruption, and the latest stored risk assessment. Role-specific allowlists narrow access further. Tool arguments are validated, results are bounded, and generated evidence references must exactly match references returned by those tools. The runtime rejects unsupported tools, invalid output, and unverified citations. It never changes operational records; every generated recommendation is forced to require human approval.
 
+| Role | Focus and boundary |
+| --- | --- |
+| `risk_intelligence` | Summarize recorded disruption and stored deterministic risk evidence; does not recalculate risk scores. |
+| `supplier_intelligence` | Review supplier records and verified delivery history; qualified alternatives, capacity, and current quotes are not available. |
+| `inventory_intelligence` | Review current balances, purchase-order context, and demand-data readiness; does not infer a forecast from balances alone. |
+| `logistics_intelligence` | Review shipments and linked disruptions; does not invent carrier tracking, routes, traffic, or alternate ETAs. |
+| `procurement_intelligence` | Review purchase orders, suppliers, materials, and stock; cannot create or approve procurement actions. |
+| `coordinator` | Run the selected specialists in order and combine their verified reports; synthesis has no direct tools. |
+
+The coordinator runs selected specialists sequentially under one shared time and tool budget, then asks a tool-free synthesis stage to combine their structured findings, recommendations, assumptions, and evidence. A specialist failure stops the workflow and is recorded with its completed and failed stages. Each stage is stored as an `AgentExecutionStep` beneath the user-scoped parent execution and is returned in execution history/detail. The coordinator cannot use evidence beyond the exact references in specialist outputs.
+
 The runtime is disabled by default. To enable external processing, an operator must set `ARES_AGENT_PROVIDER=openai_responses`, configure `ARES_AGENT_MODEL`, `ARES_AGENT_API_KEY`, and `ARES_AGENT_API_BASE_URL`, and explicitly set `ARES_AGENT_EXTERNAL_PROCESSING_ENABLED=true`. Remote endpoints must use HTTPS; HTTP is accepted only for localhost development. Configuration examples use blank provider fields, and no credentials are included in the repository. The status endpoint does not expose the key or endpoint URL. When enabled, the user's question and selected read-only ARES tool results are sent to the configured external model provider. Execution records store a hash of the idempotency key and request, the validated result, usage metadata, and safe error details; they do not store the raw question.
 
-`configured` means the settings are complete, not that the provider is reachable, the model is available, or the account has quota. No live provider request is made by default. The current runtime is synchronous and single-agent: coordinator role text is not multi-agent orchestration. Specialist workflows, background execution, cancellation, write tools, and automated actions remain later work.
+`configured` means the settings are complete, not that the provider is reachable, the model is available, or the account has quota. No live provider request is made by default. The workflow is synchronous and sequential; it does not run specialists in parallel and does not provide cancellation or background execution. Write tools and automated actions remain later work.
 
 ## Next phase
 
-Phase 3 adds actual specialist-agent workflows and coordinator orchestration. Keep provider calls opt-in and write-capable tools disabled until review, approval, and audit controls are implemented.
+Phase 4 focuses on chronological predictive-model evaluation and persisted evaluation metrics. Keep provider calls opt-in and write-capable tools disabled until review, approval, and audit controls are implemented.

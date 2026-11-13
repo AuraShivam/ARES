@@ -17,7 +17,7 @@ ARES is a standalone project. It does not require SAP or a direct connection to 
 - **Coordinates disruption work:** users create response plans and assign action items. Plans move through draft, approval, execution, and completion states; approver decisions and changes are audited. Email delivery and live webhook execution require explicit configuration and approval.
 - **Ingests external hazard alerts:** a scheduled GDACS connector imports recent global disaster alerts and reports feed freshness. GDACS reports hazards; it does not confirm that an ARES supplier, route, or facility is affected.
 - **Tracks changes and refreshes the dashboard:** direct API changes are audited. Authenticated WebSocket events tell the browser to refresh its data; 30-second polling is the fallback.
-- **Runs optional AI-assisted analysis:** authenticated, bounded single-agent executions can inspect ARES data through read-only tools and return evidence-checked findings and approval-required recommendations. The provider is disabled by default; explicit configuration is required before questions and selected records can be sent externally. Multi-agent workflows are future work.
+- **Runs optional AI-assisted analysis:** authenticated, bounded specialists can inspect ARES data through role-limited read-only tools; a coordinator can combine selected specialist reports into an evidence-checked summary. Recommendations require human approval. The provider is disabled by default; explicit configuration is required before questions and selected records can be sent externally.
 
 ## How it works
 

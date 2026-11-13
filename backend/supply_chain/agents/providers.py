@@ -36,6 +36,8 @@ class ProviderConfiguration:
     timeout_seconds: int
     max_tool_calls: int
     max_output_tokens: int
+    max_coordinator_specialists: int
+    max_coordinator_tool_calls: int
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -132,6 +134,8 @@ def provider_configuration():
         timeout_seconds=settings.ARES_AGENT_TIMEOUT_SECONDS,
         max_tool_calls=settings.ARES_AGENT_MAX_TOOL_CALLS,
         max_output_tokens=settings.ARES_AGENT_MAX_OUTPUT_TOKENS,
+        max_coordinator_specialists=settings.ARES_AGENT_MAX_COORDINATOR_SPECIALISTS,
+        max_coordinator_tool_calls=settings.ARES_AGENT_MAX_COORDINATOR_TOOL_CALLS,
     )
 
 
@@ -153,7 +157,7 @@ class OpenAIResponsesProvider:
             "instructions": instructions,
             "input": input_items,
             "tools": tool_definitions,
-            "tool_choice": "auto",
+            "tool_choice": "auto" if tool_definitions else "none",
             "parallel_tool_calls": False,
             "store": False,
             "max_output_tokens": self.configuration.max_output_tokens,

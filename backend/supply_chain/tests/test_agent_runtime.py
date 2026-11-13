@@ -84,6 +84,7 @@ class AgentRuntimeApiTests(TestCase):
         self.assertEqual(response.data["runtime"]["status"], "unavailable")
         self.assertFalse(response.data["runtime"]["external_processing_enabled"])
         self.assertEqual(response.data["execution_limits"]["requests_per_user_per_hour"], 5)
+        self.assertEqual(response.data["multi_agent_orchestration"], "sequential_specialist_pipeline")
         self.assertNotIn("private-test-key", json.dumps(response.data))
         self.assertFalse(response.data["provider_reachability_checked"])
 

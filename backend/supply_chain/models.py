@@ -651,3 +651,35 @@ class AgentExecution(TimestampedModel):
             models.Index(fields=["requested_by", "created_at"], name="agent_exec_user_date_idx"),
             models.Index(fields=["agent_id", "status"], name="agent_exec_type_status_idx"),
         ]
+
+
+class AgentExecutionStep(TimestampedModel):
+    """Auditable specialist or coordinator stage within one agent execution."""
+
+    KINDS = [("specialist", "Specialist analysis"), ("coordination", "Coordinator synthesis")]
+    STATUSES = [("running", "Running"), ("succeeded", "Succeeded"), ("failed", "Failed")]
+
+    execution = models.ForeignKey(AgentExecution, on_delete=models.CASCADE, related_name="steps")
+    sequence = models.PositiveSmallIntegerField()
+    kind = models.CharField(max_length=20, choices=KINDS)
+    agent_id = models.CharField(max_length=40, choices=AgentExecution.AGENT_IDS)
+    status = models.CharField(max_length=12, choices=STATUSES, default="running")
+    input_references = models.JSONField(default=list, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    tool_call_count = models.PositiveSmallIntegerField(default=0)
+    input_tokens = models.PositiveIntegerField(null=True, blank=True)
+    output_tokens = models.PositiveIntegerField(null=True, blank=True)
+    error_code = models.CharField(max_length=80, blank=True)
+    error_message = models.CharField(max_length=500, blank=True)
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["sequence"]
+        constraints = [models.UniqueConstraint(
+            fields=["execution", "sequence"],
+            name="uniq_agent_step_execution_sequence",
+        )]
+        indexes = [models.Index(fields=["execution", "status"], name="agent_step_exec_status_idx")]

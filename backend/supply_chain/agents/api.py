@@ -12,6 +12,7 @@ from rest_framework.throttling import UserRateThrottle
 
 from ..agentic_data_readiness import build_agent_data_readiness
 from ..models import AgentExecution
+from .contracts import SPECIALIST_AGENT_IDS
 from .providers import provider_readiness
 from .runtime import AgentExecutionFailure, execute_agent
 from .serializers import AgentExecutionReadSerializer, AgentExecutionRequestSerializer
@@ -39,18 +40,21 @@ def agent_status(request):
     return Response({
         "runtime": configuration,
         "supported_agent_roles": ["risk_intelligence", "supplier_intelligence", "inventory_intelligence", "logistics_intelligence", "procurement_intelligence", "coordinator"],
+        "supported_specialists": list(SPECIALIST_AGENT_IDS),
         "configured_tool_count": len(list_tools()),
         "tool_access": "read_only",
         "external_processing_notice": "When explicitly enabled and configured, the question and selected read-only ARES tool results are sent to the external model provider.",
-        "execution_mode": "synchronous_bounded_single_agent",
+        "execution_mode": "synchronous_bounded_agent_workflow",
         "execution_limits": {
             "requests_per_user_per_hour": 5,
             "timeout_seconds": settings.ARES_AGENT_TIMEOUT_SECONDS,
             "max_tool_calls": settings.ARES_AGENT_MAX_TOOL_CALLS,
             "max_output_tokens": settings.ARES_AGENT_MAX_OUTPUT_TOKENS,
             "max_question_characters": 1200,
+            "max_coordinator_specialists": settings.ARES_AGENT_MAX_COORDINATOR_SPECIALISTS,
+            "max_coordinator_tool_calls": settings.ARES_AGENT_MAX_COORDINATOR_TOOL_CALLS,
         },
-        "multi_agent_orchestration": "phase_3_not_available",
+        "multi_agent_orchestration": "sequential_specialist_pipeline",
         "provider_reachability_checked": False,
     })
 
@@ -64,7 +68,7 @@ def agent_tools(request):
 @throttle_classes([AgentExecutionThrottle])
 def agent_executions(request):
     if request.method == "GET":
-        executions = AgentExecution.objects.filter(requested_by=request.user).order_by("-created_at")[:50]
+        executions = AgentExecution.objects.filter(requested_by=request.user).prefetch_related("steps").order_by("-created_at")[:50]
         return Response({"executions": AgentExecutionReadSerializer(executions, many=True).data})
 
     serializer = AgentExecutionRequestSerializer(data=request.data)
@@ -78,6 +82,7 @@ def agent_executions(request):
             serializer.validated_data["agent_id"],
             serializer.validated_data["question"],
             idempotency_key,
+            specialist_ids=serializer.validated_data.get("specialists"),
         )
     except AgentExecutionFailure as exc:
         return Response({"error": {"code": exc.code, "message": exc.message}}, status=exc.http_status)
@@ -97,5 +102,5 @@ def agent_executions(request):
 
 @api_view(["GET"])
 def agent_execution_detail(request, execution_id):
-    execution = get_object_or_404(AgentExecution, pk=execution_id, requested_by=request.user)
+    execution = get_object_or_404(AgentExecution.objects.prefetch_related("steps"), pk=execution_id, requested_by=request.user)
     return Response(AgentExecutionReadSerializer(execution).data)
