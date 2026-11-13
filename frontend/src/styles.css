@@ -473,6 +473,13 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   .response-action-fields > textarea, .response-action-fields > select { grid-column: 2 / -1; }
   .response-action-fields .remove-line { grid-column: 3; grid-row: 1; }
   .response-task-heading { align-items: flex-start; }
+  .workflow-start-form { grid-template-columns: 1fr; }
+  .workflow-start-form > button { width: 100%; }
+  .workflow-handoff-fields { grid-template-columns: 1fr; }
+  .workflow-action-description { grid-column: auto; }
+  .workflow-evidence-list li { grid-template-columns: 1fr; gap: 4px; }
+  .workflow-review-actions { align-items: stretch; flex-direction: column; }
+  .workflow-review-actions .primary-button { width: 100%; }
 }
 @media (max-width: 930px) {
   .sidebar { position: sticky; inset: 0 0 auto; width: 100%; height: auto; padding: 9px 14px 0; }
@@ -550,6 +557,54 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .reviewer-identity { margin: 0; color: #728286; font-size: 9px; line-height: 1.5; }
 
 .risk-intelligence-page { display: grid; gap: 14px; }
+.disruption-workflow-panel { display: grid; gap: 11px; }
+.disruption-workflow-panel > .panel-heading { margin-bottom: 0; }
+.workflow-boundary-note { padding: 10px 12px; border-left: 2px solid #6da99d; border-radius: 0 7px 7px 0; background: #f1f8f6; color: #5e7774; font-size: 9px; line-height: 1.55; }
+.workflow-start-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.workflow-start-form .form-field, .workflow-handoff-fields .form-field { margin: 0; }
+.workflow-history { display: grid; gap: 7px; padding-top: 10px; border-top: 1px solid #edf1f0; }
+.workflow-history > strong { color: #52686b; font-size: 9px; }
+.workflow-history > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.workflow-history-item { display: flex; align-items: center; gap: 9px; min-height: 33px; padding: 6px 8px; border: 1px solid #e6eeeb; border-radius: 7px; background: #fff; color: #6a7d7f; text-align: left; font-size: 8px; cursor: pointer; }
+.workflow-history-item.is-selected { border-color: #91c1b7; background: #f2f8f6; }
+.workflow-result { display: grid; gap: 11px; padding: 12px; border: 1px solid #e3ece9; border-radius: 9px; background: #fcfdfd; }
+.workflow-result-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.workflow-result-heading > div { display: grid; gap: 4px; min-width: 0; }
+.workflow-result-heading strong { color: #354c50; font-size: 10px; }
+.workflow-result-heading small { color: #859395; font-size: 8px; }
+.workflow-findings, .workflow-recommendation { display: grid; gap: 8px; }
+.workflow-findings > strong, .workflow-handoff-form > strong, .workflow-evidence-list > strong { color: #546a6d; font-size: 9px; }
+.workflow-findings article { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; padding: 9px; border: 1px solid #e9efed; border-radius: 7px; background: #fff; }
+.workflow-findings article > div { display: grid; gap: 4px; }
+.workflow-findings article strong { color: #42595d; font-size: 9px; }
+.workflow-findings article p { margin: 0; color: #708184; font-size: 8px; line-height: 1.5; }
+.workflow-recommendation-copy { padding: 11px; border: 1px solid #dceae6; border-radius: 8px; background: #f7fbf9; }
+.workflow-recommendation-copy .eyebrow { margin: 0 0 4px; }
+.workflow-recommendation-copy h3 { margin: 0; color: #344c50; font-size: 11px; }
+.workflow-recommendation-copy > p:last-child { margin: 6px 0 0; color: #6e8082; font-size: 9px; line-height: 1.5; }
+.workflow-evidence-list { display: grid; gap: 6px; }
+.workflow-evidence-list ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.workflow-evidence-list li { display: grid; grid-template-columns: 115px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 8px; border: 1px solid #eaf0ee; border-radius: 6px; background: #fff; color: #758588; font-size: 8px; }
+.workflow-evidence-list code { overflow-wrap: anywhere; color: #42635f; font-size: 8px; }
+.workflow-evidence-list small { color: #929e9f; font-size: 7px; }
+.workflow-handoff-form { display: grid; gap: 10px; padding-top: 10px; border-top: 1px solid #e9efed; }
+.workflow-handoff-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.workflow-action-description { grid-column: 1 / -1; }
+.workflow-review-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 9px; }
+.workflow-review-actions small { max-width: 440px; color: #879395; font-size: 8px; line-height: 1.5; }
+.workflow-handoff-complete { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 9px; border: 1px solid #dfebe7; border-radius: 7px; background: #f6faf8; color: #687d7e; font-size: 8px; }
+.workflow-assumptions { color: #748386; font-size: 8px; line-height: 1.5; }
+.workflow-assumptions summary { color: #087e76; cursor: pointer; font-weight: 700; }
+.workflow-assumptions ul { display: grid; gap: 4px; padding-left: 16px; }
+.workflow-assumptions p { margin: 6px 0 0; }
+.workflow-notice { padding: 9px 11px; border: 1px solid #d8ebe5; border-radius: 7px; background: #f1faf6; color: #387a66; font-size: 9px; line-height: 1.45; }
+.agent-handoff-source { display: grid; gap: 6px; margin: 10px 0; padding: 11px 12px; border: 1px solid #dceae6; border-radius: 8px; background: #f7fbf9; }
+.agent-handoff-source > div { display: grid; gap: 3px; }
+.agent-handoff-source .eyebrow { margin: 0; }
+.agent-handoff-source strong { color: #3e585c; font-size: 9px; }
+.agent-handoff-source small, .agent-handoff-source li { color: #78898a; font-size: 8px; line-height: 1.45; }
+.agent-handoff-source > p { margin: 0; color: #687d7e; font-size: 8px; line-height: 1.5; }
+.agent-handoff-source ul { display: grid; gap: 3px; margin: 0; padding-left: 15px; }
 .demand-planning-page { display: grid; gap: 14px; }
 .demand-panel { display: grid; gap: 14px; }
 .demand-heading { align-items: center; }

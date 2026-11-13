@@ -38,6 +38,7 @@ Browser
 | `backend/supply_chain/risk_workflow.py` | Exact-snapshot disruption evaluation, shipment prediction scoring, response-effectiveness reporting, and alert maintenance |
 | `backend/supply_chain/digital_twin/` | Database-derived graph, GeoJSON, impact propagation, health KPIs, and isolated what-if scenarios |
 | `backend/supply_chain/agents/` | Bounded specialist and sequential coordinator workflows, OpenAI Responses provider adapter, validated structured output, and role-scoped read-only tools |
+| `backend/supply_chain/agents/api.py` | Authenticated agent execution history and the disruption-workflow-to-response-plan draft handoff |
 | `backend/supply_chain/agentic_data_readiness.py` | Read-only operational-data coverage report used to show prerequisites, missing evidence, and whether agent-provider configuration is present |
 | `backend/supply_chain/migrations/` | Versioned database schema changes |
 | `frontend/src/app/` | Dashboard shell, screen state, API orchestration, and user actions |
@@ -53,7 +54,7 @@ Browser
 3. Django ORM reads and updates PostgreSQL. Live inventory movements update a balance and write the movement record in one transaction; imported historical movements preserve their business event date without changing today's balance.
 4. Risk assessment combines disruption severity and reported confidence with linked supplier, shipment, open purchase-order, material, inventory, region, and source-freshness evidence. It returns a capped score, point breakdown, coverage summary, data gaps, and advisory recommendation.
 5. The optional authenticated agent runtime reads only through role-limited tools, validates specialist evidence against tool results, records each workflow stage, and synthesizes a coordinator result from those specialist reports. It sends the question and selected read-only ARES records to an external provider only when an operator configures it and explicitly enables external processing.
-6. The React dashboard calls `/api/` and renders overview metrics, tables, and forms. An agent dashboard is later-phase work.
+6. The React dashboard calls `/api/` and renders overview metrics, tables, and forms. Risk Intelligence includes a focused human-reviewed disruption workflow; a full agent control center remains later-phase work.
 
 ## Dashboard refresh behavior
 
@@ -77,7 +78,7 @@ The MVP receives data through its APIs, dashboard workflows, the demo seed comma
 - Risk rules and representative-scenario evaluation: [risk intelligence guide](../product/risk-intelligence.md); run `python manage.py evaluate_risk` from `backend/`.
 - CSV onboarding: `GET /api/imports/templates/`, `GET /api/imports/`, `POST /api/imports/preview/`, and `POST /api/imports/<uuid>/commit/`.
 - External feed status: authenticated `GET /api/feeds/status/`.
-- Agentic APIs: authenticated `GET /api/ai/status/`, `/api/ai/tools/`, and `/api/ai/data-readiness/` report provider configuration, read-only tools, and measured data coverage. `POST /api/ai/executions/` runs a bounded specialist or sequential coordinator workflow when an external provider is explicitly enabled; per-user execution history and individual specialist/synthesis steps are available at `/api/ai/executions/` and `/api/ai/executions/<uuid>/`. See the [agentic AI foundation guide](agentic-ai-foundation.md).
+- Agentic APIs: authenticated `GET /api/ai/status/`, `/api/ai/tools/`, and `/api/ai/data-readiness/` report provider configuration, read-only tools, and measured data coverage. `POST /api/ai/executions/` runs a bounded specialist or sequential coordinator workflow when an external provider is explicitly enabled; per-user execution history and individual specialist/synthesis steps are available at `/api/ai/executions/` and `/api/ai/executions/<uuid>/`. The disruption-specific workflow is at `/api/ai/disruption-workflows/` and hands a human-selected recommendation into a provenance-linked response-plan draft. See the [agentic AI foundation guide](agentic-ai-foundation.md).
 - The dashboard API base defaults to `http://127.0.0.1:8000/api`; set `VITE_API_BASE_URL` to use another API address.
 
 See [backend/README.md](../../backend/README.md) for setup and endpoint details.

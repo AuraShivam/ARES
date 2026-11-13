@@ -292,6 +292,12 @@ class ResponsePlan(TimestampedModel):
         "RiskAssessmentSnapshot", null=True, blank=True, on_delete=models.SET_NULL,
         related_name="response_plans",
     )
+    agent_execution = models.ForeignKey(
+        "AgentExecution", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="response_plans",
+    )
+    source_recommendation_index = models.PositiveSmallIntegerField(null=True, blank=True)
+    agent_recommendation = models.JSONField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
         related_name="ares_response_plans",
@@ -310,6 +316,19 @@ class ResponsePlan(TimestampedModel):
 
     class Meta:
         ordering = ["due_date", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["agent_execution", "source_recommendation_index"],
+                name="unique_agent_handoff_selection",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(agent_execution__isnull=True, source_recommendation_index__isnull=True)
+                    | Q(agent_execution__isnull=False, source_recommendation_index__isnull=False)
+                ),
+                name="response_plan_handoff_pair",
+            ),
+        ]
 
     def __str__(self):
         return self.title
@@ -672,6 +691,14 @@ class AgentExecution(TimestampedModel):
         on_delete=models.SET_NULL,
         related_name="ares_agent_executions",
     )
+    workflow_disruption = models.ForeignKey(
+        Disruption, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="ares_agent_workflows",
+    )
+    workflow_assessment_snapshot = models.ForeignKey(
+        RiskAssessmentSnapshot, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="ares_agent_workflows",
+    )
     agent_id = models.CharField(max_length=40, choices=AGENT_IDS)
     idempotency_key = models.CharField(max_length=128)
     request_hash = models.CharField(max_length=64)
@@ -699,7 +726,15 @@ class AgentExecution(TimestampedModel):
         indexes = [
             models.Index(fields=["requested_by", "created_at"], name="agent_exec_user_date_idx"),
             models.Index(fields=["agent_id", "status"], name="agent_exec_type_status_idx"),
+            models.Index(fields=["workflow_disruption", "created_at"], name="agent_wf_disrupt_date_idx"),
         ]
+        constraints += [models.CheckConstraint(
+            condition=(
+                Q(workflow_disruption__isnull=True, workflow_assessment_snapshot__isnull=True)
+                | Q(workflow_disruption__isnull=False, workflow_assessment_snapshot__isnull=False)
+            ),
+            name="agent_workflow_context_pair",
+        )]
 
 
 class AgentExecutionStep(TimestampedModel):

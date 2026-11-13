@@ -42,12 +42,12 @@ Use exact evidence references already present in those reports. Do not add, alte
 Return only the requested structured result."""
 
 AGENT_TOOLS = {
-    "risk_intelligence": {"get_data_readiness", "get_disruption", "get_shipment", "get_supplier", "get_latest_risk_assessment", "get_material", "get_inventory"},
+    "risk_intelligence": {"get_data_readiness", "get_disruption", "get_shipment", "get_supplier", "get_latest_risk_assessment", "get_risk_assessment_snapshot", "get_material", "get_inventory"},
     "supplier_intelligence": {"get_data_readiness", "get_supplier", "get_material", "get_purchase_order", "get_shipment"},
     "inventory_intelligence": {"get_data_readiness", "get_material", "get_inventory", "get_purchase_order"},
     "logistics_intelligence": {"get_data_readiness", "get_shipment", "get_disruption"},
     "procurement_intelligence": {"get_data_readiness", "get_purchase_order", "get_material", "get_inventory", "get_supplier"},
-    "coordinator": {"get_data_readiness", "get_supplier", "get_material", "get_inventory", "get_shipment", "get_purchase_order", "get_disruption", "get_latest_risk_assessment"},
+    "coordinator": {"get_data_readiness", "get_supplier", "get_material", "get_inventory", "get_shipment", "get_purchase_order", "get_disruption", "get_latest_risk_assessment", "get_risk_assessment_snapshot"},
 }
 
 

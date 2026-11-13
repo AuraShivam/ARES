@@ -570,7 +570,8 @@ class ResponsePlanSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = (
             "id", "created_by", "status", "submitted_at", "reviewed_by", "reviewed_at", "review_notes",
-            "assessment_snapshot", "completed_at", "created_at", "updated_at",
+            "assessment_snapshot", "agent_execution", "source_recommendation_index", "agent_recommendation",
+            "completed_at", "created_at", "updated_at",
         )
 
     def validate(self, attrs):

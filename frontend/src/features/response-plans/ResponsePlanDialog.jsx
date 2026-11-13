@@ -246,6 +246,12 @@ export default function ResponsePlanDialog({ planId, currentUser, onClose, onCre
           <span><small>Target date</small><strong>{formatDate(plan.due_date)}</strong></span>
         </div>
         {plan.objective && <p className="response-objective">{plan.objective}</p>}
+        {plan.agent_execution && plan.agent_recommendation && <div className="agent-handoff-source">
+          <div><p className="eyebrow">AI RECOMMENDATION SOURCE</p><strong>{plan.agent_recommendation.title}</strong><small>Workflow {plan.agent_execution.slice(0, 8)} · recommendation {Number(plan.source_recommendation_index) + 1}</small></div>
+          <p>{plan.agent_recommendation.summary}</p>
+          <ul>{(plan.agent_recommendation.evidence_references || []).map((reference, index) => <li key={`${reference.reference_type}-${reference.reference_id}-${index}`}>{humanize(reference.reference_type)} · {reference.reference_id}</li>)}</ul>
+          <small>Review the source evidence and edit this draft before submitting it for approval.</small>
+        </div>}
         {plan.reviewed_by && <div className="review-record"><strong>{humanize(plan.status)} by {plan.reviewed_by}</strong><span>{formatDate(plan.reviewed_at, true)}</span>{plan.review_notes && <p>{plan.review_notes}</p>}</div>}
 
         <div className="response-actions-list"><div className="response-section-heading"><h3>Action items</h3><span>{plan.actions?.length || 0} assigned</span></div>

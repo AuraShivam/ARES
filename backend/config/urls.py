@@ -6,7 +6,8 @@ from supply_chain.auth_views import current_user, login, logout
 from supply_chain.feed_views import feed_status
 from supply_chain.agents.api import (
     agent_execution_detail, agent_executions, agent_status, agent_tools,
-    data_readiness as agent_data_readiness,
+    data_readiness as agent_data_readiness, disruption_workflow_handoff,
+    disruption_workflows,
 )
 from supply_chain.digital_twin import api as digital_twin_api
 from supply_chain.predictive_evaluation_api import predictive_evaluation_detail, predictive_evaluations
@@ -50,6 +51,8 @@ urlpatterns = [
     path("api/ai/tools/", agent_tools, name="ai-tools"),
     path("api/ai/executions/", agent_executions, name="ai-executions"),
     path("api/ai/executions/<uuid:execution_id>/", agent_execution_detail, name="ai-execution-detail"),
+    path("api/ai/disruption-workflows/", disruption_workflows, name="ai-disruption-workflows"),
+    path("api/ai/disruption-workflows/<uuid:execution_id>/handoff/", disruption_workflow_handoff, name="ai-disruption-workflow-handoff"),
     path("api/map/data/", map_data, name="map-data"),
     path("api/digital-twin/graph/", digital_twin_api.graph_snapshot, name="digital-twin-graph"),
     path("api/digital-twin/nodes/", digital_twin_api.graph_nodes, name="digital-twin-nodes"),

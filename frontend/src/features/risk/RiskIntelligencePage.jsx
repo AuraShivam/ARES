@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { formatDate, formatNumber, humanize } from '../../lib/format.js'
 import { StatusBadge } from '../records/DataTable.jsx'
+import DisruptionResponseWorkflow from '../agents/DisruptionResponseWorkflow.jsx'
 
 const RISK_BANDS = ['low', 'moderate', 'high', 'critical']
 
@@ -256,7 +257,7 @@ function OutcomeForm({ disruptions, assessments, outcomes, plans, onSubmit, savi
   </section>
 }
 
-export default function RiskIntelligencePage({ data, loading, canReview, onSubmitOutcome, onVerifyDelivery, onCapturePrediction, savingId }) {
+export default function RiskIntelligencePage({ data, loading, canReview, onSubmitOutcome, onVerifyDelivery, onCapturePrediction, onOpenResponsePlan, savingId }) {
   const calibration = data.calibration || {}
   const byBand = calibration.by_risk_band || {}
   const shipmentCalibration = calibration.shipment_prediction_calibration || {}
@@ -267,6 +268,7 @@ export default function RiskIntelligencePage({ data, loading, canReview, onSubmi
 
   return <div className="risk-intelligence-page">
     <PredictiveRiskPanel report={data.predictive} shipments={data.shipments} disruptions={data.disruptions} plans={data.plans} loading={loading} canReview={canReview} onVerifyDelivery={onVerifyDelivery} onCapturePrediction={onCapturePrediction} savingId={savingId} />
+    <DisruptionResponseWorkflow disruptions={data.disruptions} assessments={data.assessments} onOpenResponsePlan={onOpenResponsePlan} />
     <div className="metric-grid">
       <MetricCard label="Alert threshold" value={data.policy?.alert_score_threshold ?? '—'} note="score out of 100" tone="amber" />
       <MetricCard label="Assessed disruptions" value={formatNumber(assessedDisruptions)} note="with saved assessment history" tone="blue" />

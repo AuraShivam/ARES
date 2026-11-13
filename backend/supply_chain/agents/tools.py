@@ -224,6 +224,24 @@ def _risk_assessment(args, user):
     ]}
 
 
+def _risk_assessment_snapshot(args, user):
+    try:
+        assessment = RiskAssessmentSnapshot.objects.select_related("disruption").get(pk=uuid.UUID(args["reference"]))
+    except (ValueError, TypeError, RiskAssessmentSnapshot.DoesNotExist):
+        raise AgentToolFailure("assessment_not_found", "No risk-assessment snapshot matches that exact UUID.") from None
+    data = {
+        "id": str(assessment.pk), "disruption_id": str(assessment.disruption_id),
+        "risk_score": assessment.risk_score, "risk_band": assessment.risk_band,
+        "confidence": assessment.confidence, "model_version": assessment.model_version,
+        "trigger": assessment.trigger, "factors": assessment.factors,
+        "evidence": assessment.evidence, "recommendation": assessment.recommendation,
+        "created_at": assessment.created_at.isoformat(),
+    }
+    return {"data": data, "evidence_references": [
+        _evidence("risk_assessment", assessment), _evidence("disruption", assessment.disruption),
+    ]}
+
+
 def _readiness(args, user):
     report = build_agent_data_readiness()
     evidence = [{
@@ -283,6 +301,12 @@ TOOLS = {
         "Read the latest stored deterministic risk assessment for a disruption UUID; this tool does not trigger a new assessment.",
         ReferenceArguments,
         _risk_assessment,
+    ),
+    "get_risk_assessment_snapshot": Tool(
+        "get_risk_assessment_snapshot",
+        "Read one exact stored risk-assessment snapshot by its UUID; this does not trigger a new assessment.",
+        ReferenceArguments,
+        _risk_assessment_snapshot,
     ),
 }
 

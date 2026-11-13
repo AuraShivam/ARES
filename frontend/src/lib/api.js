@@ -56,6 +56,7 @@ export async function request(path, options = {}) {
     const message = describeApiError(payload)
     const error = new Error(message || `The API returned HTTP ${response.status}.`)
     error.status = response.status
+    error.payload = payload
     throw error
   }
   return payload

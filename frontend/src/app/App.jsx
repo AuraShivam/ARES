@@ -648,7 +648,7 @@ function App() {
           {section === 'overview'
             ? <OverviewPage data={overview} homeData={homeData} loading={loading} apiHealth={apiHealth} refreshState={refreshState} lastUpdatedLabel={lastUpdatedLabel} onNavigate={navigate} onAssess={assessRisk} busyId={busyId} />
             : section === 'risk-intelligence'
-              ? <RiskIntelligencePage data={riskData} loading={loading} canReview={Boolean(auth.is_approver)} onSubmitOutcome={saveRiskOutcome} onVerifyDelivery={verifyShipmentDelivery} onCapturePrediction={captureShipmentPrediction} savingId={busyId} />
+              ? <RiskIntelligencePage data={riskData} loading={loading} canReview={Boolean(auth.is_approver)} onSubmitOutcome={saveRiskOutcome} onVerifyDelivery={verifyShipmentDelivery} onCapturePrediction={captureShipmentPrediction} onOpenResponsePlan={setSelectedPlan} savingId={busyId} />
             : section === 'demand-planning'
               ? <DemandPlanningPage data={demandData} loading={loading} />
             : section === 'network-map'

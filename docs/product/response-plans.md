@@ -11,6 +11,7 @@ Any non-terminal state → Cancelled with a reason
 ```
 
 - Plans are created as drafts. They need at least one action item before submission.
+- The Risk Intelligence page can create a draft from a human-selected recommendation in a successful disruption workflow. Such a plan retains the coordinator execution, selected recommendation, cited evidence, and exact risk-assessment snapshot. The handoff is idempotent for each workflow/recommendation selection and creates one editable manual action. AI-generated drafts still follow the standard submission, approver review, start, and action-execution rules below.
 - The authenticated reviewer identity and decision are recorded for approval or rejection. Only staff accounts or members of the `ares_approvers` group can approve or reject. Rejected plans can be edited and resubmitted.
 - Work cannot start before approval. Action items can only be updated after the plan starts.
 - Completed action items require an outcome. A plan can be completed only after each action is completed or cancelled and an overall outcome is recorded.
@@ -25,6 +26,8 @@ Any non-terminal state → Cancelled with a reason
 ## API
 
 - `GET /api/response-plans/` lists plans with disruption and action details.
+- `GET /api/ai/disruption-workflows/` lists the signed-in user's recent AI disruption workflows. `POST /api/ai/disruption-workflows/` starts a bounded analysis for `{ "disruption_id": "<uuid>", "assessment_snapshot_id": "<uuid>" }` and requires an `Idempotency-Key` header. The exact assessment must belong to the selected disruption.
+- `POST /api/ai/disruption-workflows/<execution-uuid>/handoff/` creates an audited draft for a selected recommendation. Supply `recommendation_index`, `plan_title`, `plan_owner`, `action_title`, `action_owner`, and optional `action_description`/`due_date`. The normal response-plan workflow remains responsible for review and approval.
 - `POST /api/response-plans/` creates a draft. Example:
 
 ```json
@@ -54,7 +57,7 @@ Any non-terminal state → Cancelled with a reason
 - `POST /api/response-actions/<action-uuid>/execute/` requires an `Idempotency-Key` header and accepts `{ "dry_run": true }` (default). Set `dry_run` to `false` only for an approver-authorized live webhook execution. Reuse the same key for retries of the same request (up to three total attempts); a key cannot be reused for different action data.
 - `GET /api/notifications/` lists delivery records for the signed-in recipient; staff and approvers can inspect the outbox.
 
-To deliver queued email, configure SMTP/provider environment variables and recipients in the backend environment, enable `ARES_EMAIL_DELIVERY_ENABLED=true`, then run `python manage.py dispatch_notifications`. The command is suitable for a scheduled worker; hosted scheduling and monitoring remain Phase 8 deployment work.
+To deliver queued email, configure SMTP/provider environment variables and recipients in the backend environment, enable `ARES_EMAIL_DELIVERY_ENABLED=true`, then run `python manage.py dispatch_notifications`. The command is suitable for a scheduled worker; hosted scheduling and monitoring remain overall deployment Phase 8 work.
 
 `GET /api/risk/calibration/` summarizes the latest reviewed effectiveness label for completed plans and the status of action items. These measures show review coverage and recorded outcomes; they do not establish that a plan caused an observed result. Review evidence should explain the source and timing of observed effects.
 

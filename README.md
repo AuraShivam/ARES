@@ -18,7 +18,7 @@ ARES is a standalone project. It does not require SAP or a direct connection to 
 - **Coordinates disruption work:** users create response plans and assign action items. Plans move through draft, approval, execution, and completion states; approver decisions and changes are audited. Email delivery and live webhook execution require explicit configuration and approval.
 - **Ingests external hazard alerts:** a scheduled GDACS connector imports recent global disaster alerts and reports feed freshness. GDACS reports hazards; it does not confirm that an ARES supplier, route, or facility is affected.
 - **Tracks changes and refreshes the dashboard:** direct API changes are audited. Authenticated WebSocket events tell the browser to refresh its data; 30-second polling is the fallback.
-- **Runs optional AI-assisted analysis:** authenticated, bounded specialists can inspect ARES data through role-limited read-only tools; a coordinator can combine selected specialist reports into an evidence-checked summary. Recommendations require human approval. The provider is disabled by default; explicit configuration is required before questions and selected records can be sent externally.
+- **Runs optional AI-assisted analysis:** authenticated, bounded specialists can inspect ARES data through role-limited read-only tools; a coordinator can combine selected specialist reports into an evidence-checked summary for a disruption and exact risk assessment. A human can hand a selected recommendation into an audited response-plan draft, which still follows the existing approver workflow. The provider is disabled by default; explicit configuration is required before questions and selected records can be sent externally.
 
 ## How it works
 
@@ -41,7 +41,7 @@ Risk rules and both ML models provide **advisory** results. Shipment predictions
 | Network overview | Snapshot of operational records, low stock, shipments, disruptions, and active risk alerts |
 | World map | Recorded endpoints, optional supplied shipment routes, and current GDACS event points/polygons with source metadata |
 | Supply chain digital twin | Live dependency graph, geographic locations/hazards, impact reasons, health KPIs, and isolated simulations |
-| Risk intelligence | Explainable disruption assessments and alerts, captured shipment prediction outcomes, intervention-aware calibration summaries, and reviewed response-plan effectiveness |
+| Risk intelligence | Explainable disruption assessments and alerts, shipment predictions, human-reviewed AI response briefings, captured outcomes, calibration summaries, and reviewed response-plan effectiveness |
 | Disruptions and response plans | Record disruption events, assign mitigation work, submit plans for approval, and track actions |
 | Shipments and purchase orders | Review delivery commitments, supplier links, purchase-order lines, and shipment status |
 | Inventory and demand planning | Inspect warehouse balances and movement history; review forecast demand, projected stockouts, and reorder advice |
