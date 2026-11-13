@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import os
 import re
 from datetime import date
@@ -9,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from .geospatial import MAX_ROUTE_GEOMETRY_POSITIONS, normalize_geojson_geometry
 
 from .models import (
     DataImport, DataImportRow, Disruption, Inventory, InventoryMovement, Material,
@@ -62,6 +64,7 @@ IMPORT_SCHEMAS = {
         "optional": [
             "carrier", "eta", "actual_delivery_date", "status", "risk_score",
             "origin_latitude", "origin_longitude", "destination_latitude", "destination_longitude",
+            "route_geometry", "route_geometry_source",
             "source_key", "source_updated_at",
         ],
         "key": "reference",
@@ -213,6 +216,18 @@ def _parse_source_timestamp(value):
     if parsed is None or timezone.is_naive(parsed):
         raise ValueError("use an ISO 8601 timestamp with a timezone, such as 2026-06-30T12:00:00Z")
     return parsed
+
+
+def _parse_route_geometry(value):
+    try:
+        geometry = json.loads(value)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("enter a GeoJSON LineString or MultiLineString object") from exc
+    return normalize_geojson_geometry(
+        geometry,
+        allowed_types={"LineString", "MultiLineString"},
+        max_positions=MAX_ROUTE_GEOMETRY_POSITIONS,
+    )
 
 
 def _set_value(instance, row, column, field_name, errors, parser=None, required=False, blank_default=None):
@@ -367,6 +382,10 @@ def _candidate(entity_type, row, existing, source_name, natural_key):
         _set_value(candidate, row, "destination", "destination", errors, required=True)
         for coordinate in ("origin_latitude", "origin_longitude", "destination_latitude", "destination_longitude"):
             _set_value(candidate, row, coordinate, coordinate, errors, _parse_decimal)
+        _set_value(candidate, row, "route_geometry", "route_geometry", errors, _parse_route_geometry, blank_default=None)
+        _set_value(candidate, row, "route_geometry_source", "route_geometry_source", errors)
+        if len(candidate.route_geometry_source or "") > 120:
+            errors.append("route_geometry_source must be 120 characters or fewer.")
         for latitude, longitude in (("origin_latitude", "origin_longitude"), ("destination_latitude", "destination_longitude")):
             if (getattr(candidate, latitude) is None) != (getattr(candidate, longitude) is None):
                 errors.append(f"{latitude} and {longitude} must be provided together.")

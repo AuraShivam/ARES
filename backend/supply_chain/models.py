@@ -5,6 +5,7 @@ from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q
 from django.utils import timezone
+from .geospatial import validate_route_geometry
 
 
 class TimestampedModel(models.Model):
@@ -198,6 +199,8 @@ class Shipment(SourceTrackedModel):
     origin_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
     destination_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
     destination_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
+    route_geometry = models.JSONField(null=True, blank=True, validators=[validate_route_geometry])
+    route_geometry_source = models.CharField(max_length=120, blank=True)
     carrier = models.CharField(max_length=120, blank=True)
     eta = models.DateField(null=True, blank=True)
     actual_delivery_date = models.DateField(null=True, blank=True)

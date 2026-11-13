@@ -18,6 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from .geospatial import MAX_EVENT_GEOMETRY_POSITIONS, normalize_geojson_geometry
 from .models import AuditEvent, Disruption, ExternalFeed, ExternalFeedEvent
 from .risk_workflow import assess_and_record
 
@@ -227,6 +228,26 @@ def _text_value(value):
     return str(value).strip()
 
 
+def _source_metrics(properties):
+    """Keep a small allowlisted set of source measurements without assuming a schema."""
+    fields = {
+        "magnitude": ("magnitude", "mag"),
+        "magnitude_unit": ("magnitudeunit", "magnitude_unit", "magunit"),
+        "depth": ("depth", "depthkm", "depth_km"),
+        "wind_speed": ("maxwind", "max_wind", "windspeed", "wind_speed"),
+        "wind_speed_unit": ("windunit", "wind_unit", "windspeedunit"),
+        "alert_score": ("alertscore", "alert_score", "score"),
+        "population_estimate": ("population", "populationaffected", "population_affected"),
+        "severity_detail": ("severity", "severitytext", "severity_text"),
+    }
+    result = {}
+    for normalized, aliases in fields.items():
+        value = _text_value(_property(properties, *aliases))
+        if value:
+            result[normalized] = value[:100]
+    return result
+
+
 def _is_current(value):
     if value in (None, ""):
         return True
@@ -245,9 +266,6 @@ def _api_item_values(feature, minimum_level):
     alert_level = _text_value(_property(properties, "alertlevel", "alert_level")).casefold()
     if alert_level not in ALERT_LEVELS:
         return None
-    if ALERT_LEVELS[alert_level] < ALERT_LEVELS[minimum_level] or not _is_current(_property(properties, "iscurrent", "is_current")):
-        return {"filtered": True}
-
     event_type_code = _text_value(_property(properties, "eventtype", "event_type")).upper()
     event_id = _text_value(_property(properties, "eventid", "event_id"))
     episode_id = _text_value(_property(properties, "episodeid", "episode_id"))
@@ -256,22 +274,40 @@ def _api_item_values(feature, minimum_level):
     if not event_type_code or not (event_id or fallback_id) or len(source_key) > 500:
         return None
 
+    issued_at = _parse_timestamp(_text_value(_property(properties, "datemodified", "datetime", "pubdate", "issued_at")))
+    effective_at = _parse_timestamp(_text_value(_property(properties, "fromdate", "startdate", "effective_at")))
+    expires_at = _parse_timestamp(_text_value(_property(properties, "todate", "enddate", "expires_at")))
+    if ALERT_LEVELS[alert_level] < ALERT_LEVELS[minimum_level]:
+        return {"filtered": True, "source_key": source_key}
+    is_current = _is_current(_property(properties, "iscurrent", "is_current"))
+    lifecycle = "cancelled" if not is_current else "expired" if expires_at and expires_at <= timezone.now() else "active"
+
     event_type = EVENT_TYPES.get(event_type_code, "natural disaster")
     title = _plain_text(_text_value(_property(properties, "eventname", "event_name", "name", "title")) or event_type.title())[:180]
     region_value = _property(properties, "country", "affectedcountries", "affected_countries", "location")
     region = _plain_text(_text_value(region_value))[:120]
     description = _plain_text(_text_value(_property(properties, "htmldescription", "description", "summary")))
     link = _text_value(_property(properties, "reporturl", "detailsurl", "url", "link"))
-    issued_at = _parse_timestamp(_text_value(_property(properties, "datemodified", "datetime", "pubdate", "issued_at")))
-    effective_at = _parse_timestamp(_text_value(_property(properties, "fromdate", "startdate", "effective_at")))
-    expires_at = _parse_timestamp(_text_value(_property(properties, "todate", "enddate", "expires_at")))
     iso3 = _text_value(_property(properties, "iso3")).upper()
     geographies = [value for value in (region, iso3) if value]
-    geometry = feature.get("geometry") if isinstance(feature.get("geometry"), dict) else {}
-    coordinates = geometry.get("coordinates")
+    raw_geometry = feature.get("geometry")
+    geometry_status = "missing" if raw_geometry is None else "unsupported"
+    geometry = None
+    if isinstance(raw_geometry, dict):
+        if raw_geometry.get("type") in {"Point", "Polygon", "MultiPolygon"}:
+            try:
+                geometry = normalize_geojson_geometry(
+                    raw_geometry,
+                    allowed_types={"Point", "Polygon", "MultiPolygon"},
+                    max_positions=MAX_EVENT_GEOMETRY_POSITIONS,
+                )
+                geometry_status = "valid"
+            except (TypeError, ValueError):
+                geometry_status = "invalid"
+    coordinates = (geometry or {}).get("coordinates")
     point = ""
     latitude = longitude = None
-    if geometry.get("type") == "Point" and isinstance(coordinates, (list, tuple)) and len(coordinates) >= 2:
+    if geometry and geometry.get("type") == "Point" and isinstance(coordinates, (list, tuple)) and len(coordinates) >= 2:
         try:
             longitude, latitude = float(coordinates[0]), float(coordinates[1])
             if -180 <= longitude <= 180 and -90 <= latitude <= 90:
@@ -280,11 +316,13 @@ def _api_item_values(feature, minimum_level):
                 latitude = longitude = None
         except (TypeError, ValueError):
             latitude = longitude = None
+    source_metrics = _source_metrics(properties)
     payload = {
         "source": FEED_SOURCE_NAME,
         "event_type": event_type_code,
         "event_id": event_id or fallback_id,
         "episode_id": episode_id,
+        "event_status": lifecycle,
         "alert_level": alert_level,
         "title": title,
         "country": region,
@@ -293,11 +331,13 @@ def _api_item_values(feature, minimum_level):
         "modified_at": _text_value(_property(properties, "datemodified")),
         "from_date": _text_value(_property(properties, "fromdate")),
         "to_date": _text_value(_property(properties, "todate")),
-        "geometry_type": _text_value(geometry.get("type")),
-        # Preserve the source geometry for point-in-boundary exposure analysis.
-        "geometry": geometry if geometry.get("type") in {"Point", "Polygon", "MultiPolygon"} else None,
+        "geometry_type": _text_value((geometry or {}).get("type")),
+        "geometry_status": geometry_status,
+        # Store only normalized, bounded GeoJSON so malformed boundaries never reach map clients.
+        "geometry": geometry,
         "point": point,
         "iso3": iso3,
+        "source_metrics": source_metrics,
     }
     digest = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
@@ -316,6 +356,7 @@ def _api_item_values(feature, minimum_level):
         "issued_at": issued_at,
         "effective_at": effective_at,
         "expires_at": expires_at,
+        "lifecycle": lifecycle,
         "description": description[:12000],
         "payload": payload,
         "content_hash": digest,
@@ -423,6 +464,31 @@ def _upsert_alert(feed, values):
         event = ExternalFeedEvent.objects.select_for_update().filter(feed=feed, source_key=values["source_key"]).first()
         is_new = event is None
         changed = is_new or event.content_hash != values["content_hash"]
+
+        if values.get("lifecycle", "active") != "active":
+            # Source cancellation/expiry updates source history only. ARES operational
+            # disruptions and response plans remain under human control.
+            defaults = {
+                "event_type": values["event_type"],
+                "title": values["title"][:240],
+                "severity": values["severity_text"],
+                "affected_region": values["affected_region"][:240],
+                "geographies": values["geographies"],
+                "issued_at": values["issued_at"],
+                "effective_at": values["effective_at"],
+                "expires_at": values["expires_at"],
+                "lifecycle": values["lifecycle"],
+                "content_hash": values["content_hash"],
+                "payload": values["payload"],
+            }
+            if event is None:
+                ExternalFeedEvent.objects.create(feed=feed, source_key=values["source_key"], **defaults)
+            elif changed or event.lifecycle != values["lifecycle"]:
+                for field, value in defaults.items():
+                    setattr(event, field, value)
+                event.save(update_fields=[*defaults.keys(), "updated_at"])
+            return "created" if is_new else "updated" if changed else "unchanged"
+
         if not changed:
             if event.lifecycle != "active":
                 event.lifecycle = "active"
@@ -488,7 +554,7 @@ def _upsert_alert(feed, values):
             "issued_at": values["issued_at"],
             "effective_at": values["effective_at"],
             "expires_at": values["expires_at"],
-            "lifecycle": "active",
+            "lifecycle": values.get("lifecycle", "active"),
             "content_hash": values["content_hash"],
             "payload": values["payload"],
             "disruption": disruption,

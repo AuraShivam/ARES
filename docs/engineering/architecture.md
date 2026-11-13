@@ -66,7 +66,7 @@ The MVP receives data through its APIs, dashboard workflows, the demo seed comma
 ## Current API surface
 
 - CRUD resources: suppliers, materials, warehouses, inventory, inventory movements, purchase orders, purchase-order lines, shipments, disruptions, and audit events.
-- `GET /api/map/data/` provides shipment endpoints with coordinates and active GDACS feed-event points for the authenticated world map.
+- `GET /api/map/data/` provides shipment endpoints and optional supplied route geometry plus active GDACS points/polygons and source event metadata for the authenticated world map.
 - The digital twin APIs provide the current relationship graph, GeoJSON locations, health metrics, reasoned disruption propagation, isolated simulations, and sequence-based sync recovery; see the [digital twin guide](digital-twin.md).
 - Response workflow: `/api/response-plans/` and `/api/response-actions/`; plan changes and review transitions are written to audit history.
 - Access: authenticated API tokens for the dashboard, with the `ares_approvers` group or Django staff status required for approval decisions; `/api/health/` and login are the only public API routes.
@@ -83,7 +83,7 @@ See [backend/README.md](../../backend/README.md) for setup and endpoint details.
 ## Design boundaries
 
 - Seeded and user-entered records are not verified against external supply-chain systems.
-- GDACS alerts indicate natural-disaster events; they do not prove that a specific supplier, shipment, or facility is affected.
+- GDACS alerts indicate natural-disaster events; they do not prove that a specific supplier, shipment, or facility is operationally affected. ARES distinguishes explicit operator-entered links, polygon intersections, policy-buffer proximity, indirect stored dependencies, unaffected records, and unknown data, with evidence on each result.
 - Disruption scores use transparent rules. Experimental shipment-delay and material-demand models train from verified outcomes and dated movements respectively; forecasts are withheld when there is insufficient history and have not been calibrated as probabilities.
 - API and WebSocket authentication plus response-plan approval permissions are implemented for the MVP. HTTPS deployment, production secret management, WebSocket regression coverage, and deployment safeguards remain before wider exposure; see [security and quality](security-quality.md).
 - Recommendations are advisory; ARES does not autonomously execute procurement or logistics actions.

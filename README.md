@@ -8,9 +8,9 @@ ARES is a standalone project. It does not require SAP or a direct connection to 
 
 - **Maintains supply-chain records:** suppliers, materials, warehouses, inventory balances and movements, purchase orders and lines, shipments, and disruptions.
 - **Shows operational status:** the overview summarizes inventory, shipments, active alerts, and open disruptions. Searchable record pages support sorting and CSV export.
-- **Maps network activity:** the World map plots shipment endpoints when coordinates are supplied and shows active GDACS alerts with source-provided map coordinates. A line between two endpoints is a direct connector, not a stored or verified carrier route.
+- **Maps network activity:** the World map plots endpoint connectors and optional source-attributed shipment paths, plus active GDACS points and validated source polygons with alert metadata. A direct connector is not a carrier route, and GDACS hazard presence alone does not establish a supplier or shipment impact.
 - **Explores a supply-chain digital twin:** a live graph connects suppliers, materials, warehouses, purchase orders, shipments, and disruptions from PostgreSQL records. Its geographic view uses recorded coordinates and current GDACS source geometry; missing coordinates remain visibly unavailable.
-- **Analyzes disruption exposure and what-if scenarios:** classifications include a human-readable reason. Supplier/warehouse failure, shipment delay, route disruption, material shortage, and demand surge simulations are saved separately and do not change operational records.
+- **Analyzes disruption exposure and what-if scenarios:** evidence distinguishes explicit operator-linked disruption, polygon intersection, policy-buffer proximity, indirect supply-chain dependency, unaffected, and unknown classifications. Supplier/warehouse failure, shipment delay, route disruption, material shortage, and demand surge simulations are saved separately and do not change operational records.
 - **Assesses disruption risk:** an explainable rules engine combines event severity and confidence with linked supplier, shipment, order, material, inventory, region, and source-freshness evidence. ARES saves assessment history, opens threshold alerts, and reassesses relevant changes.
 - **Forecasts shipment delays:** an experimental scikit-learn model trains from completed shipments whose actual dates were verified by an ARES approver. It can report late-delivery probability, delay estimates, supplier trends, and stock-cover context when sufficient verified examples exist.
 - **Plans material demand:** an experimental per-material model forecasts demand over 7, 30, and 90 days from dated inventory issue history. It estimates stockout timing, safety stock, and a suggested reorder quantity while accounting for dated open purchase orders. Forecasts are withheld unless that material has at least 60 days of movement history and 10 distinct consumption dates.
@@ -39,7 +39,7 @@ Risk rules and both ML models provide **advisory** results. Shipment predictions
 | Section | Purpose |
 | --- | --- |
 | Network overview | Snapshot of operational records, low stock, shipments, disruptions, and active risk alerts |
-| World map | Recorded shipment endpoints, direct endpoint connectors, and current GDACS disaster alerts |
+| World map | Recorded endpoints, optional supplied shipment routes, and current GDACS event points/polygons with source metadata |
 | Supply chain digital twin | Live dependency graph, geographic locations/hazards, impact reasons, health KPIs, and isolated simulations |
 | Risk intelligence | Explainable disruption assessments and alerts, outcome calibration, and shipment-delay outlook |
 | Disruptions and response plans | Record disruption events, assign mitigation work, submit plans for approval, and track actions |

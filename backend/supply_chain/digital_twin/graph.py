@@ -1,10 +1,12 @@
 from collections import defaultdict
 from decimal import Decimal
+from urllib.parse import urlsplit
 
 from django.db.models import F, Sum, DecimalField, ExpressionWrapper
 from django.utils import timezone
 from django.db.models import Q
 
+from supply_chain.geospatial import normalize_geojson_geometry
 from supply_chain.models import (
     Disruption, ExternalFeedEvent, Inventory, Material, PurchaseOrder,
     PurchaseOrderLine, Shipment, Supplier, Warehouse,
@@ -12,6 +14,17 @@ from supply_chain.models import (
 
 
 NODE_TYPES = ("supplier", "warehouse", "material", "purchase_order", "shipment", "disruption")
+
+
+def _safe_gdacs_url(value):
+    if not isinstance(value, str):
+        return ""
+    try:
+        parsed = urlsplit(value)
+        hostname = (parsed.hostname or "").casefold()
+        return value if parsed.scheme.casefold() == "https" and (hostname == "gdacs.org" or hostname.endswith(".gdacs.org")) else ""
+    except ValueError:
+        return ""
 
 
 def _coordinates(latitude, longitude, label="", source="record"):
@@ -54,7 +67,7 @@ def _risk_level(value):
 def _base_node(entity_type, entity, name, status_value, locations=None, kpis=None, expected_location_count=None, **metadata):
     locations = [value for value in (locations or []) if value]
     primary = locations[0] if len(locations) == 1 else None
-    geometry_available = isinstance(metadata.get("source_geometry"), dict)
+    geometry_available = isinstance(metadata.get("source_geometry"), dict) or isinstance(metadata.get("route_geometry"), dict)
     expected_location_count = len(locations) if expected_location_count is None else expected_location_count
     return {
         "id": f"{entity_type}:{entity.pk}",
@@ -66,7 +79,7 @@ def _base_node(entity_type, entity, name, status_value, locations=None, kpis=Non
         "locations": locations,
         "geographic_data_available": bool(locations) or geometry_available,
         "geographic_data_unavailable": not bool(locations) and not geometry_available,
-        "geographic_data_incomplete": len(locations) < expected_location_count,
+        "geographic_data_incomplete": len(locations) < expected_location_count and not isinstance(metadata.get("route_geometry"), dict),
         "risk_level": _risk_level(status_value),
         "kpis": kpis or {},
         "metadata": metadata,
@@ -153,32 +166,71 @@ def build_graph():
             _coordinates(shipment.origin_latitude, shipment.origin_longitude, shipment.origin, "shipment_origin"),
             _coordinates(shipment.destination_latitude, shipment.destination_longitude, shipment.destination, "shipment_destination"),
         ]
+        route_geometry = shipment.route_geometry
+        if route_geometry:
+            try:
+                route_geometry = normalize_geojson_geometry(
+                    route_geometry, allowed_types={"LineString", "MultiLineString"}, max_positions=5_000,
+                )
+            except (TypeError, ValueError):
+                route_geometry = None
         add_node(_base_node("shipment", shipment, shipment.reference, shipment.status, locations,
                             {"risk_score": shipment.risk_score, "eta": shipment.eta.isoformat() if shipment.eta else None},
-                            expected_location_count=2,
+                            expected_location_count=0 if route_geometry else 2,
                             purchase_order_number=shipment.purchase_order.number, origin=shipment.origin,
                             destination=shipment.destination, carrier=shipment.carrier,
+                            route_geometry=route_geometry,
+                            route_geometry_source=shipment.route_geometry_source if route_geometry else "",
                             route_coordinates=[[loc["latitude"], loc["longitude"]] for loc in locations if loc]))
     source_events = {}
     now = timezone.now()
-    for event in ExternalFeedEvent.objects.filter(disruption__isnull=False, lifecycle="active").filter(
-        Q(expires_at__isnull=True) | Q(expires_at__gte=now)
-    ).order_by("-issued_at"):
+    for event in ExternalFeedEvent.objects.filter(disruption__isnull=False).order_by("-issued_at", "-created_at"):
         source_events.setdefault(event.disruption_id, event)
     for disruption in disruptions:
-        location = _coordinates(disruption.latitude, disruption.longitude, disruption.affected_region or disruption.title)
         event = source_events.get(disruption.pk)
+        event_active = bool(event and event.lifecycle == "active" and (event.expires_at is None or event.expires_at > now))
+        event_lifecycle = "expired" if event and event.lifecycle == "active" and event.expires_at and event.expires_at <= now else event.lifecycle if event else "unavailable"
+        gdacs_sourced = "gdacs" in (disruption.source_name or "").casefold()
+        location = None if gdacs_sourced and not event_active else _coordinates(
+            disruption.latitude, disruption.longitude, disruption.affected_region or disruption.title,
+        )
         payload = event.payload if event and isinstance(event.payload, dict) else {}
-        if location is None and event:
+        if location is None and event_active:
             location = _source_point(payload, disruption.affected_region or disruption.title)
-        geometry = payload.get("geometry") if isinstance(payload.get("geometry"), dict) else None
+        raw_geometry = payload.get("geometry") if event_active else None
+        geometry = raw_geometry if isinstance(raw_geometry, dict) else None
+        geometry_status = payload.get("geometry_status", "missing")
+        if geometry:
+            try:
+                geometry = normalize_geojson_geometry(
+                    geometry, allowed_types={"Point", "Polygon", "MultiPolygon"}, max_positions=20_000,
+                )
+            except (TypeError, ValueError):
+                geometry = None
+                geometry_status = "invalid"
+        if geometry:
+            geometry_status = "valid"
         node = _base_node("disruption", disruption, disruption.title, disruption.status,
                           [location], {"severity": disruption.severity, "confidence": disruption.confidence},
                           expected_location_count=(1 if not geometry else (1 if location else 0)),
                           disruption_type=disruption.disruption_type, affected_region=disruption.affected_region,
                           status_label=disruption.get_status_display(), source_name=disruption.source_name,
                           source_key=disruption.source_key, source_geometry=geometry,
-                          source_event_active=bool(event))
+                          source_event_active=event_active,
+                          source_event_lifecycle=event_lifecycle,
+                          source_event_id=str(event.pk) if event else None,
+                          source_event_external_id=payload.get("event_id"),
+                          source_event_episode_id=payload.get("episode_id"),
+                          source_event_type=event.event_type if event else None,
+                          source_event_title=event.title if event else None,
+                          source_event_severity=event.severity if event else None,
+                          source_event_issued_at=event.issued_at.isoformat() if event and event.issued_at else None,
+                          source_event_effective_at=event.effective_at.isoformat() if event and event.effective_at else None,
+                          source_event_expires_at=event.expires_at.isoformat() if event and event.expires_at else None,
+                          source_event_metrics=(payload.get("source_metrics") if isinstance(payload.get("source_metrics"), dict) else {}),
+                          source_geometry_status=geometry_status,
+                          source_alert_level=payload.get("alert_level"),
+                          source_event_url=_safe_gdacs_url(payload.get("link", "")))
         node["risk_level"] = "normal" if disruption.status == "resolved" else _risk_level(disruption.severity)
         add_node(node)
 

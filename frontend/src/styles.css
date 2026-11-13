@@ -765,6 +765,7 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .twin-classification-counts > span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #e5ecea; border-radius: 15px; color: #718184; font-size: 8px; text-transform: capitalize; }
 .twin-classification-counts b { color: #34494d; font-size: 9px; }
 .classification-confirmed_affected { color: #a54e49 !important; }.classification-geographically_exposed { color: #a57432 !important; }.classification-potentially_impacted { color: #557d91 !important; }.classification-unaffected { color: #4c806b !important; }.classification-insufficient_information { color: #758184 !important; }
+.classification-confirmed_operational_disruption { color: #a54e49 !important; }.classification-confirmed_geographical_intersection { color: #a57432 !important; }.classification-potential_geographical_exposure { color: #b17d32 !important; }.classification-indirect_supply_chain_dependency { color: #557d91 !important; }.classification-unknown_insufficient_data { color: #758184 !important; }
 .twin-impact-method { margin: 9px 0; color: #849294; font-size: 8px; }
 .twin-impact-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; max-height: 390px; overflow: auto; }
 .twin-impact-list article { display: flex; gap: 8px; padding: 9px; border: 1px solid #edf1f0; border-radius: 7px; background: #fcfdfd; }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { maplibreGL } from '@maplibre/maplibre-gl-leaflet'
 import { setWorkerUrl } from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
-import { CircleMarker, MapContainer, Polyline, Popup, useMap } from 'react-leaflet'
+import { CircleMarker, GeoJSON, MapContainer, Polyline, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { formatDate } from '../../lib/format.js'
@@ -20,6 +20,25 @@ function point(latitude, longitude) {
   return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
     ? [lat, lon]
     : null
+}
+
+function geometryPoints(geometry) {
+  const positions = []
+  const walk = (coordinates) => {
+    if (!Array.isArray(coordinates)) return
+    if (coordinates.length >= 2 && typeof coordinates[0] === 'number' && typeof coordinates[1] === 'number') {
+      const location = point(coordinates[1], coordinates[0])
+      if (location) positions.push(location)
+    } else coordinates.forEach(walk)
+  }
+  walk(geometry?.coordinates)
+  return positions
+}
+
+function routeLines(geometry) {
+  if (geometry?.type === 'LineString') return [geometry.coordinates || []]
+  if (geometry?.type === 'MultiLineString') return geometry.coordinates || []
+  return []
 }
 
 function alertColor(level) {
@@ -64,9 +83,16 @@ function ShipmentRoute({ shipment }) {
   const origin = point(shipment.origin_latitude, shipment.origin_longitude)
   const destination = point(shipment.destination_latitude, shipment.destination_longitude)
   const color = shipmentColor(shipment.status)
+  const recordedRoute = routeLines(shipment.route_geometry).map((line) => line.map(([longitude, latitude]) => point(latitude, longitude)).filter(Boolean)).filter((line) => line.length >= 2)
 
   return <>
-    {origin && destination && <Polyline positions={[origin, destination]} pathOptions={{ color, opacity: 0.68, weight: 2 }} />}
+    {recordedRoute.length
+      ? recordedRoute.map((line, index) => <Polyline key={`route-${index}`} positions={line} pathOptions={{ color, opacity: 0.82, weight: 3 }}>
+          <Popup><div className="map-popup"><strong>{shipment.reference}</strong><span>Supplied route geometry</span><span>Source · {shipment.route_geometry_source || 'not specified'}</span></div></Popup>
+        </Polyline>)
+      : origin && destination && <Polyline positions={[origin, destination]} pathOptions={{ color, opacity: 0.52, weight: 2, dashArray: '5 5' }}>
+          <Popup><div className="map-popup"><strong>{shipment.reference}</strong><span>Direct endpoint connector · not a verified route</span></div></Popup>
+        </Polyline>}
     {origin && <CircleMarker center={origin} radius={5} pathOptions={{ color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 }}>
       <Popup><div className="map-popup"><strong>{shipment.reference}</strong><span>Origin · {shipment.origin}</span><span>{shipment.carrier || 'Carrier not set'} · {shipment.status.replaceAll('_', ' ')}</span></div></Popup>
     </CircleMarker>}
@@ -77,7 +103,7 @@ function ShipmentRoute({ shipment }) {
 }
 
 function DisasterMarker({ event }) {
-  const location = point(event.latitude, event.longitude)
+  const location = point(event.latitude, event.longitude) || (event.geometry?.type === 'Point' ? point(event.geometry.coordinates?.[1], event.geometry.coordinates?.[0]) : null)
   if (!location) return null
   const color = alertColor(event.alert_level)
   return <CircleMarker center={location} radius={9} pathOptions={{ color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.92 }}>
@@ -86,9 +112,43 @@ function DisasterMarker({ event }) {
       <span>{event.event_type} · {event.alert_level} alert</span>
       {event.affected_region && <span>{event.affected_region}</span>}
       <span>Updated · {formatDate(event.issued_at, true)}</span>
+      {event.source_event_id && <span>GDACS event · {event.source_event_id}{event.episode_id ? ` / episode ${event.episode_id}` : ''}</span>}
+      <span>Geometry · {event.geometry_status || 'not supplied'}</span>
+      {Object.entries(event.source_metrics || {}).map(([key, value]) => <span key={key}>{key.replaceAll('_', ' ')} · {value}</span>)}
       {event.source_url && <a href={event.source_url} target="_blank" rel="noreferrer">View GDACS event ↗</a>}
     </div></Popup>
   </CircleMarker>
+}
+
+function DisasterBoundary({ event }) {
+  if (!['Polygon', 'MultiPolygon'].includes(event.geometry?.type)) return null
+  const feature = { type: 'Feature', id: event.id, properties: {}, geometry: event.geometry }
+  return <GeoJSON data={feature} style={{ color: alertColor(event.alert_level), weight: 2, opacity: 0.9, fillColor: alertColor(event.alert_level), fillOpacity: 0.13 }}
+    onEachFeature={(_feature, layer) => {
+      const content = document.createElement('div')
+      const title = document.createElement('strong')
+      title.textContent = event.title
+      content.appendChild(title)
+      for (const text of [`${event.event_type} · ${event.alert_level} alert`, event.affected_region, `Updated · ${formatDate(event.issued_at, true)}`, `GDACS event · ${event.source_event_id || 'identifier not supplied'}${event.episode_id ? ` / episode ${event.episode_id}` : ''}`, `GDACS geometry · ${event.geometry_status || 'not supplied'}`].filter(Boolean)) {
+        const row = document.createElement('div')
+        row.textContent = text
+        content.appendChild(row)
+      }
+      for (const [key, value] of Object.entries(event.source_metrics || {})) {
+        const row = document.createElement('div')
+        row.textContent = `${key.replaceAll('_', ' ')} · ${value}`
+        content.appendChild(row)
+      }
+      if (event.source_url) {
+        const link = document.createElement('a')
+        link.href = event.source_url
+        link.target = '_blank'
+        link.rel = 'noreferrer'
+        link.textContent = 'View GDACS event ↗'
+        content.appendChild(link)
+      }
+      layer.bindPopup(content)
+    }} />
 }
 
 function Metric({ label, value, detail, tone = '' }) {
@@ -108,21 +168,23 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
     [allShipments, includeDelivered],
   )
   const locatedShipments = useMemo(
-    () => currentShipments.filter((shipment) => point(shipment.origin_latitude, shipment.origin_longitude) || point(shipment.destination_latitude, shipment.destination_longitude)),
+    () => currentShipments.filter((shipment) => routeLines(shipment.route_geometry).length || point(shipment.origin_latitude, shipment.origin_longitude) || point(shipment.destination_latitude, shipment.destination_longitude)),
     [currentShipments],
   )
   const locatedDisasters = useMemo(
-    () => disasters.filter((event) => point(event.latitude, event.longitude)),
+    () => disasters.filter((event) => point(event.latitude, event.longitude) || geometryPoints(event.geometry).length),
     [disasters],
   )
   const locations = useMemo(() => [
     ...(showShipments ? locatedShipments.flatMap((shipment) => [
       point(shipment.origin_latitude, shipment.origin_longitude),
       point(shipment.destination_latitude, shipment.destination_longitude),
+      ...geometryPoints(shipment.route_geometry),
     ].filter(Boolean)) : []),
-    ...(showDisasters ? locatedDisasters.map((event) => point(event.latitude, event.longitude)).filter(Boolean) : []),
+    ...(showDisasters ? locatedDisasters.flatMap((event) => [point(event.latitude, event.longitude), ...geometryPoints(event.geometry)].filter(Boolean)) : []),
   ], [locatedShipments, locatedDisasters, showShipments, showDisasters])
   const routeCount = currentShipments.filter((shipment) => point(shipment.origin_latitude, shipment.origin_longitude) && point(shipment.destination_latitude, shipment.destination_longitude)).length
+  const suppliedRouteCount = currentShipments.filter((shipment) => routeLines(shipment.route_geometry).length > 0).length
   const incompleteRoutes = currentShipments.filter((shipment) => !point(shipment.origin_latitude, shipment.origin_longitude) || !point(shipment.destination_latitude, shipment.destination_longitude))
   const unlocatedShipments = incompleteRoutes.filter((shipment) => !point(shipment.origin_latitude, shipment.origin_longitude) && !point(shipment.destination_latitude, shipment.destination_longitude))
   const feed = data?.feed || {}
@@ -130,8 +192,8 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
 
   return <div className="network-map-page">
     <div className="map-metrics-grid">
-      <Metric label={includeDelivered ? 'Shipments shown' : 'Open shipments'} value={currentShipments.length} detail={`${routeCount} with both endpoint coordinates`} />
-      <Metric label="GDACS events" value={disasters.length} detail={`${locatedDisasters.length} with map coordinates`} tone="disaster" />
+      <Metric label={includeDelivered ? 'Shipments shown' : 'Open shipments'} value={currentShipments.length} detail={`${suppliedRouteCount} supplied paths · ${routeCount} endpoint connectors`} />
+      <Metric label="GDACS events" value={disasters.length} detail={`${locatedDisasters.length} with source geometry`} tone="disaster" />
       <Metric label="Shipments missing endpoint coordinates" value={incompleteRoutes.length} detail={`${unlocatedShipments.length} have no mapped endpoint`} tone={incompleteRoutes.length ? 'attention' : ''} />
       <Metric label="GDACS updated" value={feed.last_success_at ? formatDate(feed.last_success_at, true) : 'Not yet'} detail={feedState} tone={feed.status === 'ok' ? 'connected' : 'attention'} />
     </div>
@@ -155,12 +217,13 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
           <OpenFreeMapLayer />
           <FitMapToData locations={locations} />
           {showShipments && locatedShipments.map((shipment) => <ShipmentRoute key={shipment.id} shipment={shipment} />)}
+          {showDisasters && locatedDisasters.map((event) => <DisasterBoundary key={`boundary-${event.id}`} event={event} />)}
           {showDisasters && locatedDisasters.map((event) => <DisasterMarker key={event.id} event={event} />)}
         </MapContainer>
         {!locations.length && !loading && <div className="map-empty-overlay"><strong>No mapped coordinates yet</strong><span>GDACS events and shipments appear here when their coordinates are available.</span></div>}
         {loading && <div className="map-loading-overlay"><i />Updating map data…</div>}
       </div>
-      <div className="map-footnote"><span>Basemap by OpenFreeMap · © OpenMapTiles · Data © OpenStreetMap contributors</span><span>Shipment lines directly connect recorded endpoints; ARES has no stored carrier route geometry. GDACS is refreshed by the ARES feed worker.</span></div>
+      <div className="map-footnote"><span>Basemap by OpenFreeMap · © OpenMapTiles · Data © OpenStreetMap contributors</span><span>Solid lines are supplied shipment paths; dashed lines only connect endpoints. GDACS polygons are source geometry, not confirmation of operational impact.</span></div>
     </section>
 
     <div className="map-detail-grid">
@@ -169,7 +232,7 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
         {disasters.length
           ? <div className="map-event-list">{disasters.slice(0, 8).map((event) => <article className="map-event-row" key={event.id}>
               <i style={{ '--event-color': alertColor(event.alert_level) }} />
-              <div><strong>{event.title}</strong><span>{[event.event_type, event.affected_region].filter(Boolean).join(' · ') || 'Natural disaster'}</span></div>
+              <div><strong>{event.title}</strong><span>{[event.event_type, event.affected_region, event.source_event_id && `GDACS ${event.source_event_id}`, `geometry ${event.geometry_status || 'not supplied'}`].filter(Boolean).join(' · ') || 'Natural disaster'}</span></div>
               <small>{event.alert_level}</small>
             </article>)}</div>
           : <p className="map-empty-list">{loading ? 'Loading GDACS events…' : 'No active GDACS events are available. Check that the GDACS worker is running.'}</p>}
@@ -181,7 +244,7 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
         <div className="panel-heading"><div><p className="eyebrow">LOCATION DATA</p><h2>Shipments missing endpoint coordinates</h2><p>ARES does not guess locations from free-text city names.</p></div><button type="button" className="text-button" onClick={() => onNavigate?.('imports')}>Open data onboarding →</button></div>
         {incompleteRoutes.length
           ? <>
-              <div className="map-unlocated-note">Add paired latitude and longitude values for both endpoints in the shipment CSV to plot a direct endpoint connector. ARES does not store carrier route geometry.</div>
+              <div className="map-unlocated-note">Add paired endpoint coordinates to plot an endpoint connector, or import an actual GeoJSON route path with its source. ARES never infers a route.</div>
               <div className="map-event-list">{incompleteRoutes.slice(0, 5).map((shipment) => <article className="map-event-row" key={shipment.id}>
                 <i className="legend-route" />
                 <div><strong>{shipment.reference}</strong><span>{shipment.origin} → {shipment.destination}</span></div>
@@ -189,7 +252,7 @@ export default function NetworkMapPage({ data, loading, onNavigate }) {
               </article>)}</div>
               {incompleteRoutes.length > 5 && <p className="map-limit-note">And {incompleteRoutes.length - 5} more shipments need coordinates.</p>}
             </>
-          : <p className="map-empty-list">All displayed shipments have coordinates for both endpoints. The line connects those points directly; it is not a verified carrier route.</p>}
+          : <p className="map-empty-list">All displayed shipments have endpoint coordinates. Dashed connectors are not verified carrier routes; supplied paths are shown separately.</p>}
         {counts.shipments_truncated && <p className="map-limit-note">The map is showing the first {counts.shipments_returned} of {counts.shipments_total} shipment records.</p>}
       </section>
     </div>

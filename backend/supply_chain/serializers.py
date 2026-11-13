@@ -5,6 +5,7 @@ from hashlib import sha1
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
+from .geospatial import MAX_ROUTE_GEOMETRY_POSITIONS, normalize_geojson_geometry
 
 from .models import (
     AuditEvent, Disruption, Inventory, InventoryMovement, Material, PurchaseOrder,
@@ -325,6 +326,15 @@ class ShipmentSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
+        if "route_geometry" in attrs and attrs["route_geometry"] is not None:
+            try:
+                attrs["route_geometry"] = normalize_geojson_geometry(
+                    attrs["route_geometry"],
+                    allowed_types={"LineString", "MultiLineString"},
+                    max_positions=MAX_ROUTE_GEOMETRY_POSITIONS,
+                )
+            except (TypeError, ValueError) as exc:
+                raise serializers.ValidationError({"route_geometry": str(exc)}) from exc
         for latitude, longitude in (
             ("origin_latitude", "origin_longitude"),
             ("destination_latitude", "destination_longitude"),

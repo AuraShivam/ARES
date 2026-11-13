@@ -41,7 +41,7 @@ erDiagram
 
 ARES has no customer or distribution-destination entity. Shipment origin/destination are text fields, with optional paired coordinates. A shipment is connected to a warehouse only when the endpoint text exactly matches a unique warehouse name or code; ARES does not geocode or guess this relationship. `PurchaseOrder.material` remains as a compatibility field; graph generation uses normalized `PurchaseOrderLine` rows when present and falls back to the legacy header material when no lines exist.
 
-The graph contains supplier, warehouse, material, purchase-order, shipment, and disruption nodes. A material can have multiple map locations from its preferred supplier and inventory warehouses. A shipment can have separate origin and destination locations. Nodes report unavailable geography when source coordinates are absent. Inventory balances are represented in `stores` edge metadata, not duplicated as graph nodes. Shipment endpoint lines connect only the two recorded endpoints; the model has no verified carrier route geometry, so these lines are not presented as actual paths.
+The graph contains supplier, warehouse, material, purchase-order, shipment, and disruption nodes. A material can have multiple map locations from its preferred supplier and inventory warehouses. A shipment can have separate origin and destination locations and may optionally store a GeoJSON `LineString` or `MultiLineString` plus the source attribution entered by the importer. ARES stores that attribution as provided; it does not verify that the path reflects carrier operations. The World map draws the supplied path as a solid line; endpoint-only connectors are dashed and are not presented as actual carrier routes. ARES never infers routes or facility coordinates. Inventory balances are represented in `stores` edge metadata, not duplicated as graph nodes.
 
 ## Graph generation and API
 
@@ -55,7 +55,7 @@ All listed endpoints require an authenticated ARES account. Collection endpoints
 | `GET /api/digital-twin/nodes/` | Independently filtered and paginated nodes |
 | `GET /api/digital-twin/edges/` | Independently filtered and paginated relationships; supports `edge_type`, `source`, and `target` |
 | `GET /api/digital-twin/entities/{type}/{uuid}/` | Entity detail plus direct links and neighboring entities |
-| `GET /api/digital-twin/geo/` | GeoJSON for recorded facilities, shipment endpoints/direct connectors, and current disruption geometry |
+| `GET /api/digital-twin/geo/` | GeoJSON for recorded facilities, supplied shipment paths or endpoint connectors, and current disruption geometry with source metadata |
 | `GET /api/digital-twin/health/` | Database-derived supply-chain KPIs and missing-coordinate counts |
 | `GET /api/digital-twin/impacts/{disruption-uuid}/` | Classifications, reasons, and geographic policy used for a disruption |
 | `GET /api/digital-twin/dependencies/{type}/{uuid}/?direction=upstream\|downstream\|all` | Direct dependencies of an entity |
@@ -69,22 +69,23 @@ Example graph query: `GET /api/digital-twin/graph/?type=supplier,shipment&risk_l
 
 ## Geographic impact methodology
 
-The impact endpoint returns one of `confirmed_affected`, `geographically_exposed`, `potentially_impacted`, `unaffected`, or `insufficient_information` for each graph node, with a reason for every result. The map supports record search/type filters; selecting a GDACS disruption marker opens the same impact analysis used by the graph inspector.
+The impact endpoint returns a canonical `exposure_classification`, structured `evidence`, and a human-readable reason for every graph node. It also retains the original `classification` and `counts` fields for API compatibility. Canonical classes are `confirmed_operational_disruption`, `confirmed_geographical_intersection`, `potential_geographical_exposure`, `indirect_supply_chain_dependency`, `unaffected`, and `unknown_insufficient_data`. The map supports record search/type filters; selecting a current GDACS disruption opens the same impact analysis used by the graph inspector.
 
-- `confirmed_affected` means the disruption record explicitly links an affected supplier or shipment; it does not mean ARES independently verified a hazard impact.
-- `geographically_exposed` means recorded entity coordinates intersect a GDACS-provided polygon/multipolygon (or lie within its configured buffer), or fall within a severity/type distance threshold around a point event.
-- `potentially_impacted` is propagated across recorded dependency links from explicitly linked or geographically exposed entities.
-- `unaffected` means available coordinates are outside the analyzed area and no dependency path was found.
-- `insufficient_information` is used when required entity coordinates or disruption geometry/coordinates are missing.
+- `confirmed_operational_disruption` means an operator-entered ARES disruption record explicitly links a supplier or shipment. This is a recorded assertion, not independent field verification or a claim that GDACS proved the impact.
+- `confirmed_geographical_intersection` means recorded facility coordinates fall inside a valid source-provided GDACS polygon/multipolygon or a supplied shipment path intersects it.
+- `potential_geographical_exposure` means a facility/route is within the configured buffer of a polygon boundary or point event. A point-event radius is a policy distance, not a physical hazard boundary.
+- `indirect_supply_chain_dependency` means the entity is connected through stored dependency edges to an explicitly linked or geographically exposed entity; the evidence includes the traversed path.
+- `unaffected` means the available coordinates/routes were checked and fell outside the configured exposure area, with no dependency path found.
+- `unknown_insufficient_data` is used when required entity coordinates or disruption geometry are missing, or a linked entity has incomplete coordinates.
 
-Country and region strings are never used to infer exposure. GDACS polygon and multipolygon geometry is retained from the source; point distance thresholds are policy buffers, not measured hazard radii. Configure `ARES_DIGITAL_TWIN_EXPOSURE_THRESHOLDS_KM` as a JSON object keyed by hazard type and severity (`low`, `medium`, `high`, `critical`); use a `default` key for hazard types without an override. The shipped defaults are broad starting values, not scientific hazard boundaries, and should be calibrated by the demonstration operator. Values must be between 0 and 5,000 km.
+Country and region strings are never used to infer exposure. GDACS source geometry is validated for supported GeoJSON types, numeric finite WGS84 coordinates, closed polygon rings, and bounded vertex counts before persistence. Unsupported or invalid geometry is retained only as a geometry-status diagnostic and is not drawn or used for impact classification. The feed also retains available event/episode identifiers, lifecycle, timestamps, alert level, allowlisted source metrics, and a GDACS source URL. Lifecycle cancellation/expiry affects source-event history and current map display only; it never automatically closes an ARES disruption or response plan. Configure `ARES_DIGITAL_TWIN_EXPOSURE_THRESHOLDS_KM` as a JSON object keyed by hazard type and severity (`low`, `medium`, `high`, `critical`); use a `default` key for hazard types without an override. The shipped defaults are broad starting values, not scientific hazard boundaries, and should be calibrated by the demonstration operator. Values must be between 0 and 5,000 km.
 
 Example source-provided flood walkthrough:
 
 1. Add or import a warehouse/supplier with its actual latitude and longitude. Leave either field pair blank when the location is unknown.
 2. Sync GDACS with `python manage.py sync_gdacs_alerts`; current GeoJSON boundaries are retained with their source event when GDACS supplies them.
 3. Open **Supply chain digital twin**, select the active flood disruption, then choose **Analyze impact**.
-4. Review the map and the classification counts. A facility inside the source boundary is geographically exposed; its materials, open purchase orders, and shipments can be marked potentially impacted only when ARES has the corresponding stored dependency links.
+4. Review source geometry status and the canonical classification counts. A facility inside the source boundary or an imported shipment path intersecting it is a confirmed geographical intersection; proximity buffers remain potential. Its materials, open purchase orders, and shipments can be classified as indirect dependencies only when ARES has the corresponding stored links.
 5. Read each entity's explanation and missing-data reason before creating response work. A same-country record with no coordinate is not called affected.
 
 This is a procedure, not a claim that any particular current ARES record is exposed to a real flood.
@@ -106,7 +107,7 @@ The returned result is explicitly labeled `SIMULATED` and is saved under its own
 
 Shipment records do not allocate quantities to purchase-order lines. For a shipment-delay/route scenario, ARES therefore treats the linked PO's outstanding quantity as carried by that shipment; if multiple shipments link to the PO, the output warns that this assumption may overstate the affected quantity. Inbound orders with no usable expected date/ETA are excluded from quantitative horizon projections and identified as a data gap. Warehouse destination matching is exact; unresolved inbound destination is not assigned to the failed warehouse. Demand-surge impact is quantified only after at least 60 days of movement history and 10 distinct issue dates; otherwise the result says it is insufficiently supported.
 
-The `route_disruption` scenario currently applies a selected `delay_days` value to one shipment, like `shipment_delay`; ARES has no saved carrier route geometry or alternate-route model. It does not calculate a reroute or derive a delay from the GDACS boundary.
+The `route_disruption` scenario currently applies a selected `delay_days` value to one shipment, like `shipment_delay`; saved route geometry supports map display and polygon exposure checks, but ARES has no alternate-route provider/model. It does not calculate a reroute or derive a delay from the GDACS boundary.
 
 ## Synchronization and recovery
 

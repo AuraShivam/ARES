@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -26,7 +27,9 @@ def feed_status(request):
     status = "configuration_error" if configuration_error else "configuration_changed" if config_changed else feed.status if feed else "never"
     last_attempt_at = feed.last_attempt_at if feed else None
     elapsed = (timezone.now() - last_attempt_at).total_seconds() if last_attempt_at else None
-    recent_events = feed.events.filter(lifecycle="active").count() if feed else 0
+    recent_events = feed.events.filter(lifecycle="active").filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
+    ).count() if feed else 0
 
     return Response({
         "sources": [{

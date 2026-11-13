@@ -108,10 +108,33 @@ function bindFeaturePopup(feature, layer, onAnalyze) {
   const title = document.createElement('strong')
   title.textContent = feature?.properties?.name || 'Supply-chain location'
   content.appendChild(title)
-  for (const label of [feature?.properties?.type, feature?.properties?.status, feature?.properties?.location_source, feature?.properties?.route_display].filter(Boolean)) {
+  const properties = feature?.properties || {}
+  for (const label of [properties.type, properties.status, properties.location_source, properties.route_display,
+    properties.route_geometry_source && `Route source · ${properties.route_geometry_source}`,
+    properties.source_name && `Source · ${properties.source_name}`,
+    properties.source_event_type && `Event · ${properties.source_event_type}`,
+    properties.source_alert_level && `Alert · ${properties.source_alert_level}`,
+    properties.source_event_lifecycle && `Source lifecycle · ${properties.source_event_lifecycle}`,
+    properties.source_geometry_status && `Geometry · ${properties.source_geometry_status}`,
+    properties.source_event_issued_at && `Source updated · ${formatDate(properties.source_event_issued_at, true)}`,
+    properties.source_event_effective_at && `Effective · ${formatDate(properties.source_event_effective_at, true)}`,
+    properties.source_event_expires_at && `Expires · ${formatDate(properties.source_event_expires_at, true)}`].filter(Boolean)) {
     const row = document.createElement('div')
     row.textContent = String(label).replaceAll('_', ' ')
     content.appendChild(row)
+  }
+  for (const [key, value] of Object.entries(properties.source_event_metrics || {})) {
+    const row = document.createElement('div')
+    row.textContent = `${key.replaceAll('_', ' ')} · ${value}`
+    content.appendChild(row)
+  }
+  if (properties.source_url) {
+    const link = document.createElement('a')
+    link.href = properties.source_url
+    link.target = '_blank'
+    link.rel = 'noreferrer'
+    link.textContent = 'View source event ↗'
+    content.appendChild(link)
   }
   if (feature?.properties?.type === 'disruption' && feature?.id && onAnalyze) {
     const button = document.createElement('button')
@@ -149,7 +172,7 @@ function EntityPanel({ node, detail, busy, onAnalyze }) {
     <div className="twin-entity-heading"><span className={`twin-type-mark ${entity.type}`}><svg viewBox="-20 -20 40 40"><Shape type={entity.type} fill={nodeColor(entity)} /></svg></span><div><small>{entity.type.replaceAll('_', ' ')}</small><strong>{entity.name}</strong></div></div>
     <div className="twin-entity-facts"><span>Status <b>{entity.status?.replaceAll('_', ' ') || 'unknown'}</b></span><span>Risk <b>{entity.risk_level || 'unknown'}</b></span><span>Location <b>{entity.geographic_data_available ? 'coordinates available' : 'geographic data unavailable'}</b></span></div>
     {Object.entries(entity.kpis || {}).map(([key, value]) => <div className="twin-detail-row" key={key}><span>{key.replaceAll('_', ' ')}</span><b>{String(value)}</b></div>)}
-    {Object.entries(metadata).filter(([key, value]) => !['source_geometry', 'route_coordinates'].includes(key) && value !== null && value !== '').slice(0, 12).map(([key, value]) => <div className="twin-detail-row" key={key}><span>{key.replaceAll('_', ' ')}</span><b>{Array.isArray(value) ? value.join(', ') : String(value)}</b></div>)}
+    {Object.entries(metadata).filter(([key, value]) => !['source_geometry', 'route_coordinates', 'route_geometry'].includes(key) && value !== null && value !== '').slice(0, 16).map(([key, value]) => <div className="twin-detail-row" key={key}><span>{key.replaceAll('_', ' ')}</span><b>{Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value)}</b></div>)}
     {entity.type === 'disruption' && <button className="primary-button twin-action" disabled={busy} onClick={() => onAnalyze(entity.entity_id)}>{busy ? 'Analyzing…' : 'Analyze impact'}</button>}
     {detail?.relationships?.length > 0 && <div className="twin-relationship-list"><strong>Direct relationships</strong>{detail.relationships.slice(0, 8).map((edge) => <span key={edge.id}>{edge.type.replaceAll('_', ' ')} · {edge.source === node.id ? edge.target.split(':')[0] : edge.source.split(':')[0]}</span>)}</div>}
   </div>
@@ -387,9 +410,9 @@ export default function DigitalTwinPage({ data, loading, liveUpdates }) {
 
     {impact && <section className="panel twin-panel twin-impact-panel">
       <div className="panel-heading"><div><p className="eyebrow">IMPACT ANALYSIS · {impact.disruption?.severity}</p><h2>{impact.disruption?.title}</h2><p>Records are classified with a reason; geographic thresholds are policy distances, not observed hazard boundaries.</p></div><button type="button" className="secondary-button" onClick={() => setImpact(null)}>Close</button></div>
-      <div className="twin-classification-counts">{Object.entries(impact.counts || {}).map(([key, value]) => <span className={`classification-${key}`} key={key}><b>{value}</b>{key.replaceAll('_', ' ')}</span>)}</div>
+      <div className="twin-classification-counts">{Object.entries(impact.exposure_counts || impact.counts || {}).map(([key, value]) => <span className={`classification-${key}`} key={key}><b>{value}</b>{key.replaceAll('_', ' ')}</span>)}</div>
       <div className="twin-impact-method">{impact.method?.geographic_source || 'Geographic source unavailable'} · {impact.method?.threshold_km} km {impact.method?.threshold_policy} threshold · country/region-name matching disabled</div>
-      <div className="twin-impact-list">{impact.entities?.filter((item) => item.classification !== 'unaffected').slice(0, 30).map((item) => <article key={item.id}><span className={`impact-marker classification-${item.classification}`} /> <div><strong>{item.name}</strong><small>{item.type.replaceAll('_', ' ')} · {item.classification.replaceAll('_', ' ')}</small><p>{item.reason}</p></div></article>)}</div>
+      <div className="twin-impact-list">{impact.entities?.filter((item) => (item.exposure_classification || item.classification) !== 'unaffected').slice(0, 30).map((item) => { const classification = item.exposure_classification || item.classification; return <article key={item.id}><span className={`impact-marker classification-${classification}`} /> <div><strong>{item.name}</strong><small>{item.type.replaceAll('_', ' ')} · {classification.replaceAll('_', ' ')}</small><p>{item.reason}</p>{item.evidence?.distance_km !== undefined && <small>Measured separation · {item.evidence.distance_km} km · policy buffer {item.evidence.threshold_km} km</small>}{item.evidence?.path_labels?.length > 0 && <small>Dependency evidence · {item.evidence.path_labels.join(' → ')}</small>}{item.evidence?.route_geometry_source && <small>Route source · {item.evidence.route_geometry_source}</small>}{item.evidence?.source_event_external_id && <small>GDACS event · {item.evidence.source_event_external_id}{item.evidence.source_event_episode_id ? ` / episode ${item.evidence.source_event_episode_id}` : ''}</small>}{item.evidence?.source_alert_level && <small>Alert · {item.evidence.source_alert_level}{item.evidence.source_event_issued_at ? ` · updated ${formatDate(item.evidence.source_event_issued_at, true)}` : ''} · geometry {item.evidence.source_geometry_status || 'not supplied'}</small>}{item.evidence?.geographic_caveat && <small>{item.evidence.geographic_caveat}</small>}{item.evidence?.source_event_url && <a href={item.evidence.source_event_url} target="_blank" rel="noreferrer">View GDACS source ↗</a>}</div></article> })}</div>
     </section>}
 
     <section className="panel twin-panel twin-simulation-panel">

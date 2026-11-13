@@ -25,7 +25,7 @@ The report exposes separate readiness for deterministic risk assessment, dated-d
 - Demand forecast eligibility is counted per material using the existing model's 180-day window, minimum 60 days of history, and at least 10 distinct issue dates.
 - Shipment-delay model readiness follows the existing model's minimum 40 consistent approver-verified deliveries, with at least 10 late and 10 on-time examples. Delay-duration readiness is reported separately and needs 8 late examples.
 - Supplier records currently identify a preferred supplier. A qualified alternative-supplier catalog, material capability/capacity, contract constraints, and current quote data are not modeled.
-- Shipment records can include endpoint coordinates, but ARES has no verified route geometry, live carrier tracking, traffic feed, or route alternatives provider.
+- Shipment records can include endpoints and an optional source-attributed GeoJSON path. ARES does not supply a route provider, live carrier tracking, traffic feed, or route alternatives provider.
 - GDACS freshness and active alert counts come from the persisted feed status. A GDACS event is contextual hazard evidence and does not prove that a named ARES facility or shipment is impacted.
 - Source provenance counts records that have a non-empty `source_name`; they do not independently validate the source's truth.
 
@@ -123,3 +123,9 @@ The runtime is disabled by default. To enable external processing, an operator m
 ## Next phase
 
 Phase 4 adds chronological model evaluation through `POST /api/models/evaluations/` and `python manage.py evaluate_predictive_models`. Runs compare both current predictors with transparent baselines, persist holdout metrics and a SHA-256 data fingerprint, and return an explicit insufficient-data result when evaluation thresholds are not met. See the [predictive model evaluation guide](predictive-model-evaluation.md). Provider calls remain opt-in and operational writes remain outside this evaluation workflow.
+
+## Phase 5: disaster and geospatial exposure
+
+The GDACS connector validates and bounds source GeoJSON before persistence, retains event identifiers, available source metrics, timestamps, source URL, and active/cancelled/expired lifecycle, and preserves operator control of linked ARES disruptions and response plans. Current maps show validated GDACS point/polygon geometry and optional source-attributed shipment `LineString`/`MultiLineString` paths. Endpoint-only connectors are shown separately and are never treated as routes.
+
+The digital-twin impact API adds structured `evidence` and canonical `exposure_classification` values: `confirmed_operational_disruption` (explicit ARES link), `confirmed_geographical_intersection` (entity coordinates inside a source polygon or supplied shipment path intersects it), `potential_geographical_exposure` (configured proximity buffer), `indirect_supply_chain_dependency` (stored graph path), `unaffected`, and `unknown_insufficient_data`. Point-event buffers are always potential. Country/region matching is disabled. Original `classification`/`counts` values remain for compatibility. This is a local code implementation; apply the new shipment-route migration and verify a live feed against the configured PostgreSQL runtime before demoing it. ARES does not invent coordinates, routes, event metrics, or operational impact.

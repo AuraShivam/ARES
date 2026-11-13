@@ -40,6 +40,7 @@ from .serializers import (
 )
 from .permissions import IsSupplyChainApprover
 from .gdacs_feed import FEED_KEY
+from .geospatial import MAX_EVENT_GEOMETRY_POSITIONS, MAX_ROUTE_GEOMETRY_POSITIONS, normalize_geojson_geometry
 
 logger = logging.getLogger("ares.api")
 MAX_MAP_SHIPMENTS = 2000
@@ -49,6 +50,15 @@ MAX_MAP_EVENTS = 500
 def _reviewer_identity(user):
     display_name = user.get_full_name().strip()
     return display_name if display_name and len(display_name) <= 150 else user.get_username()
+
+
+def _map_geometry(value, allowed_types, max_positions):
+    if not isinstance(value, dict):
+        return None
+    try:
+        return normalize_geojson_geometry(value, allowed_types=allowed_types, max_positions=max_positions)
+    except (TypeError, ValueError):
+        return None
 
 
 class AuditMixin:
@@ -428,6 +438,10 @@ def map_data(request):
         "origin_longitude": float(shipment.origin_longitude) if shipment.origin_longitude is not None else None,
         "destination_latitude": float(shipment.destination_latitude) if shipment.destination_latitude is not None else None,
         "destination_longitude": float(shipment.destination_longitude) if shipment.destination_longitude is not None else None,
+        "route_geometry": _map_geometry(
+            shipment.route_geometry, {"LineString", "MultiLineString"}, MAX_ROUTE_GEOMETRY_POSITIONS,
+        ),
+        "route_geometry_source": shipment.route_geometry_source,
         "carrier": shipment.carrier,
         "eta": shipment.eta,
         "status": shipment.status,
@@ -439,7 +453,7 @@ def map_data(request):
         feed__key=FEED_KEY,
         lifecycle="active",
     ).filter(
-        Q(expires_at__isnull=True) | Q(expires_at__gte=now),
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now),
     ).order_by("-issued_at", "-created_at")
     event_total = event_query.count()
     event_rows = list(event_query[:MAX_MAP_EVENTS])
@@ -459,6 +473,14 @@ def map_data(request):
                     latitude = longitude = None
             except (TypeError, ValueError):
                 latitude = longitude = None
+        geometry = _map_geometry(
+            payload.get("geometry"), {"Point", "Polygon", "MultiPolygon"}, MAX_EVENT_GEOMETRY_POSITIONS,
+        )
+        geometry_status = payload.get("geometry_status", "missing")
+        if geometry:
+            geometry_status = "valid"
+        elif geometry_status == "valid":
+            geometry_status = "invalid"
         disasters.append({
             "id": str(event.pk),
             "title": event.title,
@@ -469,6 +491,11 @@ def map_data(request):
             "expires_at": event.expires_at,
             "latitude": latitude,
             "longitude": longitude,
+            "geometry": geometry,
+            "geometry_status": geometry_status,
+            "source_event_id": payload.get("event_id", ""),
+            "episode_id": payload.get("episode_id", ""),
+            "source_metrics": payload.get("source_metrics", {}) if isinstance(payload.get("source_metrics"), dict) else {},
             "source_url": _safe_gdacs_url(payload.get("link", "")),
         })
 
@@ -490,10 +517,11 @@ def map_data(request):
                 shipment["origin_latitude"] is not None or shipment["destination_latitude"] is not None
                 for shipment in shipments
             ),
+            "shipments_with_route_geometry": sum(bool(shipment["route_geometry"]) for shipment in shipments),
             "disasters_total": event_total,
             "disasters_returned": len(disasters),
             "disasters_truncated": event_total > MAX_MAP_EVENTS,
-            "disasters_with_coordinates": sum(event["latitude"] is not None for event in disasters),
+            "disasters_with_coordinates": sum(event["latitude"] is not None or event["geometry"] is not None for event in disasters),
         },
     })
 

@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from urllib.parse import urlsplit
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -32,6 +33,17 @@ ENTITY_MODELS = {
     "shipment": Shipment,
     "disruption": Disruption,
 }
+
+
+def _safe_source_url(value):
+    if not isinstance(value, str):
+        return ""
+    try:
+        parsed = urlsplit(value)
+        hostname = (parsed.hostname or "").casefold()
+        return value if parsed.scheme.casefold() == "https" and (hostname == "gdacs.org" or hostname.endswith(".gdacs.org")) else ""
+    except ValueError:
+        return ""
 
 
 def _csv_parameter(request, name, allowed=None):
@@ -145,13 +157,20 @@ def geo_data(request):
             if "gdacs" in source_name and not (node.get("metadata") or {}).get("source_event_active"):
                 continue
         if node["type"] == "shipment":
+            route_geometry = node["metadata"].get("route_geometry")
+            if route_geometry:
+                features.append({"type": "Feature", "id": node["id"], "geometry": route_geometry,
+                                 "properties": {"id": node["id"], "type": node["type"], "name": node["name"],
+                                                "status": node["status"],
+                                                "route_display": "supplied shipment route geometry; source attribution recorded",
+                                                "route_geometry_source": node["metadata"].get("route_geometry_source") or "not specified"}})
             coords = node["metadata"].get("route_coordinates") or []
-            if len(coords) == 2:
+            if not route_geometry and len(coords) == 2:
                 geometry = {"type": "LineString", "coordinates": [[coords[0][1], coords[0][0]], [coords[1][1], coords[1][0]]]}
                 features.append({"type": "Feature", "id": node["id"], "geometry": geometry,
                                  "properties": {"id": node["id"], "type": node["type"], "name": node["name"], "status": node["status"],
                                                 "route_display": "direct line between recorded endpoints; not carrier route geometry"}})
-            else:
+            elif not route_geometry:
                 missing["shipments"] += 1
             for index, location in enumerate(node["locations"]):
                 features.append({"type": "Feature", "id": f"{node['id']}:endpoint:{index}", "geometry": {
@@ -159,7 +178,8 @@ def geo_data(request):
                     "properties": {"id": node["id"], "type": "shipment_endpoint", "name": location["label"],
                                    "shipment": node["name"], "status": node["status"]}})
             continue
-        geometry = (node.get("metadata") or {}).get("source_geometry") if node["type"] == "disruption" else None
+        metadata = node.get("metadata") or {}
+        geometry = metadata.get("source_geometry") if node["type"] == "disruption" else None
         if geometry and not _valid_source_geometry(geometry):
             geometry = None
         if not geometry and node.get("location"):
@@ -168,7 +188,20 @@ def geo_data(request):
         if geometry:
             features.append({"type": "Feature", "id": node["id"], "geometry": geometry,
                              "properties": {"id": node["id"], "type": node["type"], "name": node["name"],
-                                            "status": node["status"], "risk_level": node["risk_level"]}})
+                                            "status": node["status"], "risk_level": node["risk_level"],
+                                            "source_name": metadata.get("source_name", ""),
+                                            "source_event_id": metadata.get("source_event_id"),
+                                            "source_event_external_id": metadata.get("source_event_external_id"),
+                                            "source_event_episode_id": metadata.get("source_event_episode_id"),
+                                            "source_event_type": metadata.get("source_event_type"),
+                                            "source_alert_level": metadata.get("source_alert_level"),
+                                            "source_event_lifecycle": metadata.get("source_event_lifecycle"),
+                                            "source_event_issued_at": metadata.get("source_event_issued_at"),
+                                            "source_event_effective_at": metadata.get("source_event_effective_at"),
+                                            "source_event_expires_at": metadata.get("source_event_expires_at"),
+                                            "source_geometry_status": metadata.get("source_geometry_status"),
+                                            "source_event_metrics": metadata.get("source_event_metrics", {}),
+                                            "source_url": _safe_source_url(metadata.get("source_event_url", ""))}})
         elif node["type"] in {"supplier", "warehouse", "disruption"}:
             missing[f"{node['type']}s"] += 1
         for index, location in enumerate(node.get("locations") or []):
