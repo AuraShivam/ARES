@@ -6,8 +6,9 @@ from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.decorators import api_view, throttle_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
@@ -19,7 +20,7 @@ from ..models import (
 from ..serializers import ResponsePlanSerializer
 from .contracts import SPECIALIST_AGENT_IDS
 from .providers import provider_readiness
-from .runtime import AgentExecutionFailure, execute_agent
+from .runtime import AgentExecutionFailure, execute_agent, governance_metadata
 from .serializers import (
     AgentExecutionReadSerializer, AgentExecutionRequestSerializer,
     DisruptionWorkflowHandoffSerializer, DisruptionWorkflowRequestSerializer,
@@ -37,12 +38,14 @@ class AgentExecutionThrottle(UserRateThrottle):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def data_readiness(request):
     """Report current operational-data coverage for planned AI capabilities."""
     return Response(build_agent_data_readiness())
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def agent_status(request):
     configuration = provider_readiness()
     return Response({
@@ -63,16 +66,19 @@ def agent_status(request):
             "max_coordinator_tool_calls": settings.ARES_AGENT_MAX_COORDINATOR_TOOL_CALLS,
         },
         "multi_agent_orchestration": "sequential_specialist_pipeline",
+        "governance": governance_metadata(),
         "provider_reachability_checked": False,
     })
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def agent_tools(request):
     return Response({"tools": list_tools()})
 
 
 @api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
 @throttle_classes([AgentExecutionThrottle])
 def agent_executions(request):
     if request.method == "GET":
@@ -111,6 +117,7 @@ def agent_executions(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def agent_execution_detail(request, execution_id):
     execution = get_object_or_404(AgentExecution.objects.select_related(
         "workflow_disruption", "workflow_assessment_snapshot",
@@ -131,6 +138,7 @@ def _disruption_workflow_question(disruption_id, assessment_id):
 
 
 @api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
 @throttle_classes([AgentExecutionThrottle])
 def disruption_workflows(request):
     if request.method == "GET":
@@ -199,6 +207,7 @@ def disruption_workflows(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 @throttle_classes([AgentExecutionThrottle])
 @transaction.atomic
 def disruption_workflow_handoff(request, execution_id):

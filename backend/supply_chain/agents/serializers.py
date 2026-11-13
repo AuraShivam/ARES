@@ -39,7 +39,7 @@ class AgentExecutionStepReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = AgentExecutionStep
         fields = (
-            "id", "sequence", "kind", "agent_id", "status", "input_references", "result",
+            "id", "sequence", "kind", "agent_id", "prompt_version", "status", "input_references", "result",
             "attempt_count", "tool_call_count", "input_tokens", "output_tokens",
             "error_code", "error_message", "started_at", "completed_at", "duration_ms", "created_at",
         )
@@ -55,8 +55,9 @@ class AgentExecutionReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = AgentExecution
         fields = (
-            "id", "agent_id", "status", "input_references", "result", "provider",
-            "model_name", "attempt_count", "tool_call_count", "input_tokens", "steps",
+            "id", "agent_id", "status", "prompt_version", "policy_version",
+            "input_references", "result", "provider", "model_name", "model_version",
+            "attempt_count", "tool_call_count", "input_tokens", "steps",
             "output_tokens", "error_code", "error_message", "started_at",
             "completed_at", "duration_ms", "created_at", "workflow_disruption",
             "workflow_assessment_snapshot", "workflow_disruption_title",
