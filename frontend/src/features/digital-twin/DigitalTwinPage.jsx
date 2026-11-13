@@ -7,7 +7,7 @@ import { GeoJSON, MapContainer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { request } from '../../lib/api.js'
-import { formatDate, formatRelativeTime } from '../../lib/format.js'
+import { formatDate, formatRelativeTime, humanize } from '../../lib/format.js'
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/positron'
 const GRAPH_WIDTH = 1220
@@ -240,6 +240,11 @@ export default function DigitalTwinPage({ data, loading, liveUpdates }) {
   const [scenarioValue, setScenarioValue] = useState('7')
   const [simulation, setSimulation] = useState(null)
   const [simulationBusy, setSimulationBusy] = useState(false)
+  const [savedSimulations, setSavedSimulations] = useState([])
+  const [simulationPagination, setSimulationPagination] = useState({ count: 0, page: 1, page_count: 1 })
+  const [simulationHistoryLoading, setSimulationHistoryLoading] = useState(true)
+  const [simulationHistoryBusy, setSimulationHistoryBusy] = useState(false)
+  const [simulationHistoryError, setSimulationHistoryError] = useState('')
   const [recoveryOptionsText, setRecoveryOptionsText] = useState('[]')
   const [rankingObjective, setRankingObjective] = useState('balanced')
   const [geoTypeFilter, setGeoTypeFilter] = useState('all')
@@ -256,6 +261,19 @@ export default function DigitalTwinPage({ data, loading, liveUpdates }) {
     setGraph(data.graph)
     setPositions({})
   }, [data?.graph?.generated_at])
+
+  useEffect(() => {
+    let active = true
+    request('/digital-twin/simulations/?page=1&page_size=8')
+      .then((response) => {
+        if (!active) return
+        setSavedSimulations(response.results || [])
+        setSimulationPagination(response.pagination || { count: 0, page: 1, page_count: 1 })
+      })
+      .catch((error) => { if (active) setSimulationHistoryError(error.message) })
+      .finally(() => { if (active) setSimulationHistoryLoading(false) })
+    return () => { active = false }
+  }, [])
 
   const visibleNodes = useMemo(() => graph.nodes.filter((node) =>
     (typeFilter === 'all' || node.type === typeFilter)
@@ -337,8 +355,29 @@ export default function DigitalTwinPage({ data, loading, liveUpdates }) {
       body.ranking_weights = RANKING_OBJECTIVES[rankingObjective]
       const saved = await request('/digital-twin/simulations/', { method: 'POST', body: JSON.stringify(body) })
       setSimulation(saved)
+      setSavedSimulations((current) => [saved, ...current.filter((item) => item.id !== saved.id)].slice(0, 8))
+      setSimulationPagination((current) => ({ ...current, count: current.count + 1, page: 1, page_count: Math.max(1, Math.ceil((current.count + 1) / 8)) }))
     } catch (error) { setPageError(error.message) }
     finally { setSimulationBusy(false) }
+  }
+
+  async function loadMoreSimulations() {
+    if (simulationHistoryBusy || simulationPagination.page >= simulationPagination.page_count) return
+    const nextPage = simulationPagination.page + 1
+    setSimulationHistoryBusy(true)
+    setSimulationHistoryError('')
+    try {
+      const response = await request(`/digital-twin/simulations/?page=${nextPage}&page_size=8`)
+      setSavedSimulations((current) => [...new Map([...current, ...(response.results || [])].map((item) => [item.id, item])).values()])
+      setSimulationPagination(response.pagination || { count: savedSimulations.length, page: nextPage, page_count: nextPage })
+    } catch (error) { setSimulationHistoryError(error.message) }
+    finally { setSimulationHistoryBusy(false) }
+  }
+
+  function selectSavedSimulation(item) {
+    setSimulation(item)
+    const savedType = item.scenario?.scenario_type
+    if (savedType && SCENARIOS.some(([key]) => key === savedType)) setScenarioType(savedType)
   }
 
   function graphPointerDown(event, nodeId) {
@@ -480,6 +519,22 @@ export default function DigitalTwinPage({ data, loading, liveUpdates }) {
       </form>
       <details className="twin-recovery-input"><summary>Add specific recovery options (optional)</summary><p>Paste up to 10 JSON options: an inventory transfer, emergency procurement from a supplier with verified delivery history, or a source-attributed alternate route. Give options the same <code>combination_name</code> to compare them as one combined plan; without it, each is simulated independently. See the digital twin guide for fields. These entries are scenario assumptions only.</p><textarea aria-label="Recovery options JSON" rows="7" spellCheck="false" value={recoveryOptionsText} onChange={(event) => setRecoveryOptionsText(event.target.value)} placeholder="[]" /></details>
       {scenarioType === 'demand_surge' && <p className="twin-data-note">Demand uplift is quantified only when the selected material has at least 60 days of movement history and 10 distinct issue dates.</p>}
+      <div className="twin-simulation-history">
+        <div className="twin-simulation-history-heading"><div><strong>Saved scenario history</strong><small>{simulationPagination.count} saved run{simulationPagination.count === 1 ? '' : 's'} · select a run to reopen its complete result</small></div></div>
+        {simulationHistoryError && <p className="twin-error-text" role="alert">{simulationHistoryError}</p>}
+        {simulationHistoryLoading
+          ? <div className="twin-empty-state">Loading saved scenarios…</div>
+          : savedSimulations.length
+            ? <div className="twin-simulation-history-list">{savedSimulations.map((item) => {
+              const scenarioTitle = SCENARIOS.find(([key]) => key === item.scenario?.scenario_type)?.[1] || humanize(item.scenario?.scenario_type || 'scenario')
+              const entityName = graph.nodes.find((node) => node.entity_id === item.scenario?.entity_id)?.name || item.scenario?.entity_id?.slice(0, 8) || 'Unknown entity'
+              return <button type="button" className={simulation?.id === item.id ? 'twin-simulation-history-item is-selected' : 'twin-simulation-history-item'} key={item.id} onClick={() => selectSavedSimulation(item)} aria-pressed={simulation?.id === item.id}>
+                <span><strong>{scenarioTitle} · {entityName}</strong><small>{formatDate(item.created_at, true)} · {item.result?.summary?.affected_materials ?? 0} materials · {item.result?.summary?.shipments_in_scope ?? 0} shipments</small></span><i aria-hidden="true">›</i>
+              </button>
+            })}</div>
+            : <div className="twin-empty-state">No saved scenarios yet. Run a scenario to begin a history.</div>}
+        {simulationPagination.page < simulationPagination.page_count && <button className="secondary-button twin-simulation-history-more" type="button" onClick={loadMoreSimulations} disabled={simulationHistoryBusy}>{simulationHistoryBusy ? 'Loading…' : 'Load older scenarios'}</button>}
+      </div>
       {simulation && <div className="twin-simulation-result">
         <div className="twin-result-heading"><div><span className="simulated-badge">SIMULATED</span><strong>{simulation.result?.summary?.affected_materials ?? 0} materials in scope</strong></div><small>Saved {formatDate(simulation.created_at, true)} · ID {simulation.id}</small></div>
         <div className="twin-impact-summary">{simulation.result?.summary?.purchase_orders_in_scope ?? 0} purchase orders · {simulation.result?.summary?.shipments_in_scope ?? 0} shipments · projected through {simulation.result?.horizon_end}</div>

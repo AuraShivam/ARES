@@ -12,6 +12,7 @@ import LoginScreen from '../features/auth/LoginScreen.jsx'
 import ExternalFeedStatus from '../features/imports/ExternalFeedStatus.jsx'
 import RiskIntelligencePage from '../features/risk/RiskIntelligencePage.jsx'
 import DemandPlanningPage from '../features/inventory/DemandPlanningPage.jsx'
+const IntelligenceCenterPage = lazy(() => import('../features/intelligence/IntelligenceCenterPage.jsx'))
 const DigitalTwinPage = lazy(() => import('../features/digital-twin/DigitalTwinPage.jsx'))
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 30_000
@@ -159,6 +160,9 @@ function App() {
         cursor = next
         try { window.sessionStorage.setItem('ares-digital-twin-sequence', String(cursor)) } catch { /* Storage may be unavailable in embedded contexts. */ }
         setDigitalTwinData({ graph, geo, health, sync, recoveredChanges: recoveredChanges.slice(-50) })
+        setRecords([])
+        setFeedStatus(null)
+      } else if (section === 'intelligence-center') {
         setRecords([])
         setFeedStatus(null)
       } else {
@@ -653,6 +657,8 @@ function App() {
               ? <DemandPlanningPage data={demandData} loading={loading} />
             : section === 'network-map'
               ? <Suspense fallback={<LoadingState />}><NetworkMapPage data={mapData} loading={loading} onNavigate={navigate} /></Suspense>
+              : section === 'intelligence-center'
+                ? <Suspense fallback={<LoadingState />}><IntelligenceCenterPage /></Suspense>
               : section === 'digital-twin'
                 ? <Suspense fallback={<LoadingState />}><DigitalTwinPage data={digitalTwinData} loading={loading} liveUpdates={liveUpdates} /></Suspense>
             : <section className="panel records-panel">

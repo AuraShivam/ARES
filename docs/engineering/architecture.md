@@ -44,6 +44,7 @@ Browser
 | `frontend/src/app/` | Dashboard shell, screen state, API orchestration, and user actions |
 | `frontend/src/config/` | Navigation and table field configuration |
 | `frontend/src/features/` | Overview widgets, record tables, and action dialogs |
+| `frontend/src/features/intelligence/` | Agent control center, data-readiness view, and persisted predictive-model evaluations |
 | `frontend/src/lib/` | Shared API request and display formatting helpers |
 | `docs/` | Architecture and delivery roadmap |
 
@@ -54,7 +55,7 @@ Browser
 3. Django ORM reads and updates PostgreSQL. Live inventory movements update a balance and write the movement record in one transaction; imported historical movements preserve their business event date without changing today's balance.
 4. Risk assessment combines disruption severity and reported confidence with linked supplier, shipment, open purchase-order, material, inventory, region, and source-freshness evidence. It returns a capped score, point breakdown, coverage summary, data gaps, and advisory recommendation.
 5. The optional authenticated agent runtime reads only through role-limited tools, validates specialist evidence against tool results, records each workflow stage, and synthesizes a coordinator result from those specialist reports. It sends the question and selected read-only ARES records to an external provider only when an operator configures it and explicitly enables external processing.
-6. The React dashboard calls `/api/` and renders overview metrics, tables, and forms. Risk Intelligence includes a focused human-reviewed disruption workflow; a full agent control center remains later-phase work.
+6. The React dashboard calls `/api/` and renders overview metrics, tables, and forms. Risk Intelligence includes the human-reviewed disruption workflow; AI Control Center runs bounded agents and reviews chronological model evaluations.
 
 ## Dashboard refresh behavior
 
@@ -79,6 +80,7 @@ The MVP receives data through its APIs, dashboard workflows, the demo seed comma
 - CSV onboarding: `GET /api/imports/templates/`, `GET /api/imports/`, `POST /api/imports/preview/`, and `POST /api/imports/<uuid>/commit/`.
 - External feed status: authenticated `GET /api/feeds/status/`.
 - Agentic APIs: authenticated `GET /api/ai/status/`, `/api/ai/tools/`, and `/api/ai/data-readiness/` report provider configuration, read-only tools, and measured data coverage. `POST /api/ai/executions/` runs a bounded specialist or sequential coordinator workflow when an external provider is explicitly enabled; per-user execution history and individual specialist/synthesis steps are available at `/api/ai/executions/` and `/api/ai/executions/<uuid>/`. The disruption-specific workflow is at `/api/ai/disruption-workflows/` and hands a human-selected recommendation into a provenance-linked response-plan draft. See the [agentic AI foundation guide](agentic-ai-foundation.md).
+- Predictive model evaluations: authenticated `GET/POST /api/models/evaluations/` and `GET /api/models/evaluations/<uuid>/` start, list, and inspect chronological holdout runs. The AI Control Center compares shipment-delay and demand-forecast metrics with saved transparent baselines; runs do not change live model behavior.
 - The dashboard API base defaults to `http://127.0.0.1:8000/api`; set `VITE_API_BASE_URL` to use another API address.
 
 See [backend/README.md](../../backend/README.md) for setup and endpoint details.

@@ -23,6 +23,12 @@ const NAV_GROUPS = [
     ],
   },
   {
+    title: 'Intelligence',
+    items: [
+      ['intelligence-center', 'AI control center', '✦'],
+    ],
+  },
+  {
     title: 'Records',
     items: [
       ['purchase-order-lines', 'PO line items', '≡'],
@@ -50,6 +56,7 @@ const SECTIONS = {
   'purchase-orders': { title: 'Purchase orders', description: 'Review supplier commitments and multi-line order value.' },
   inventory: { title: 'Inventory', description: 'See on-hand stock, reorder thresholds, and warehouse balances.' },
   'demand-planning': { title: 'Demand planning', description: 'Forecast material consumption, stockout timing, and replenishment needs from dated usage history.' },
+  'intelligence-center': { title: 'AI control center', description: 'Review data readiness, run bounded evidence-backed agents, and compare predictive models with historical baselines.' },
   warehouses: { title: 'Warehouses', description: 'Manage the facilities connected to inventory balances.' },
   suppliers: { title: 'Suppliers', description: 'Review supplier coverage, lead times, and risk profiles.' },
   materials: { title: 'Materials', description: 'Explore material criticality and preferred sourcing.' },

@@ -90,6 +90,8 @@ Example source-provided flood walkthrough:
 
 This is a procedure, not a claim that any particular current ARES record is exposed to a real flood.
 
+The Digital Twin dashboard shows the latest eight simulations saved by the signed-in account and can page through older runs. Selecting a saved run reopens the complete stored projections, assumptions, and recovery-strategy comparison. A new simulation is stored separately from supply-chain operational records; opening history never reruns the calculation.
+
 ## Simulations
 
 Supported scenarios are supplier failure, warehouse failure, shipment delay, route disruption, material shortage, and demand surge. Example request:
