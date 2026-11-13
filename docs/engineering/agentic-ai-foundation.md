@@ -120,12 +120,18 @@ The runtime is disabled by default. To enable external processing, an operator m
 
 `configured` means the settings are complete, not that the provider is reachable, the model is available, or the account has quota. No live provider request is made by default. The workflow is synchronous and sequential; it does not run specialists in parallel and does not provide cancellation or background execution. Write tools and automated actions remain later work.
 
-## Next phase
+## Phase 4: predictive model evaluation
 
-Phase 4 adds chronological model evaluation through `POST /api/models/evaluations/` and `python manage.py evaluate_predictive_models`. Runs compare both current predictors with transparent baselines, persist holdout metrics and a SHA-256 data fingerprint, and return an explicit insufficient-data result when evaluation thresholds are not met. See the [predictive model evaluation guide](predictive-model-evaluation.md). Provider calls remain opt-in and operational writes remain outside this evaluation workflow.
+Chronological model evaluation is available through `POST /api/models/evaluations/` and `python manage.py evaluate_predictive_models`. Runs compare both current predictors with transparent baselines, persist holdout metrics and a SHA-256 data fingerprint, and return an explicit insufficient-data result when evaluation thresholds are not met. See the [predictive model evaluation guide](predictive-model-evaluation.md). Provider calls remain opt-in and operational writes remain outside this evaluation workflow.
 
 ## Phase 5: disaster and geospatial exposure
 
 The GDACS connector validates and bounds source GeoJSON before persistence, retains event identifiers, available source metrics, timestamps, source URL, and active/cancelled/expired lifecycle, and preserves operator control of linked ARES disruptions and response plans. Current maps show validated GDACS point/polygon geometry and optional source-attributed shipment `LineString`/`MultiLineString` paths. Endpoint-only connectors are shown separately and are never treated as routes.
 
 The digital-twin impact API adds structured `evidence` and canonical `exposure_classification` values: `confirmed_operational_disruption` (explicit ARES link), `confirmed_geographical_intersection` (entity coordinates inside a source polygon or supplied shipment path intersects it), `potential_geographical_exposure` (configured proximity buffer), `indirect_supply_chain_dependency` (stored graph path), `unaffected`, and `unknown_insufficient_data`. Point-event buffers are always potential. Country/region matching is disabled. Original `classification`/`counts` values remain for compatibility. This is a local code implementation; apply the new shipment-route migration and verify a live feed against the configured PostgreSQL runtime before demoing it. ARES does not invent coordinates, routes, event metrics, or operational impact.
+
+## Phase 6: recovery strategy simulation
+
+`POST /api/digital-twin/simulations/` now accepts up to 10 explicit recovery options and optional `ranking_weights`. Supplier alternatives are grounded in approver-verified delivered shipment history; operator options can model inventory redistribution, emergency procurement, and a source-attributed route alternative. Entries with the same `combination_name` are evaluated as one bounded combination, with supplied quantities and limits applied to an isolated scenario projection. The resulting comparison is saved with the simulation and displayed on the Digital Twin page.
+
+This phase is deterministic and advisory. ARES does not infer supplier capacity, current quotes, warehouse demand/capacity, or alternate routes, and it does not execute proposed actions. Missing metrics lower score coverage or remain unavailable. See the [digital twin guide](digital-twin.md#recovery-strategy-comparison) for request fields, scoring policy, evidence rules, and assumptions. Source code is implemented locally; the frontend production build and Python syntax checks pass. Authenticated database-backed runtime verification remains pending in the configured PostgreSQL environment.

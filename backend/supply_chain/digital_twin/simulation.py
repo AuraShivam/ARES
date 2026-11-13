@@ -7,6 +7,7 @@ from django.utils import timezone
 from supply_chain.models import (
     Inventory, InventoryMovement, Material, PurchaseOrder, Shipment, Supplier, Warehouse,
 )
+from .recovery import compare_recovery_options
 
 
 INBOUND_STATUSES = ("approved", "in_transit", "delayed")
@@ -124,7 +125,10 @@ def execute_simulation(scenario):
         scenario_type, scenario["entity_id"], horizon_end,
     )
     if scenario_type == "route_disruption":
-        notes.append("Route disruption is represented by the user-entered delay for one shipment; no saved carrier route geometry or alternate-route calculation exists in ARES.")
+        if not any(option.get("strategy_type") == "route_alternative" for option in scenario.get("recovery_options", [])):
+            notes.append("No alternate route was supplied for this scenario; ARES does not invent routes or query a routing provider.")
+        else:
+            notes.append("Alternate route options are operator-supplied scenario assumptions and are not independently verified.")
     affected_po_ids = set()
     for order in orders:
         affected_po_ids.add(str(order.pk))
@@ -235,6 +239,9 @@ def execute_simulation(scenario):
         notes.append("Some inbound orders have no expected date or linked shipment ETA and were excluded from quantified projections: " + ", ".join(sorted(missing_dates)[:20]) + ("…" if len(missing_dates) > 20 else ""))
     if not materials:
         notes.append("No materials could be connected to this scenario from current ARES records.")
+    recovery_comparison = compare_recovery_options(
+        scenario, target, materials, projected,
+    )
     return {
         "label": "SIMULATED",
         "scenario": scenario,
@@ -247,6 +254,7 @@ def execute_simulation(scenario):
         "delayed_purchase_orders": delayed_order_details,
         "shipments": sorted(shipment_ids),
         "material_projection": projected,
+        "recovery_comparison": recovery_comparison,
         "assumptions_and_data_gaps": list(dict.fromkeys(notes)),
         "production_records_changed": False,
     }

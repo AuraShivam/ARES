@@ -109,6 +109,64 @@ Shipment records do not allocate quantities to purchase-order lines. For a shipm
 
 The `route_disruption` scenario currently applies a selected `delay_days` value to one shipment, like `shipment_delay`; saved route geometry supports map display and polygon exposure checks, but ARES has no alternate-route provider/model. It does not calculate a reroute or derive a delay from the GDACS boundary.
 
+### Recovery strategy comparison
+
+Every saved simulation also contains `result.recovery_comparison`. It compares explicit operator-supplied recovery options in isolated copies of the same scenario projection and can include bounded evidence candidates from current ARES records. It remains a what-if calculation: it does not create a purchase order, reserve inventory, change a shipment, send a notification, approve a response plan, or execute an action.
+
+The request accepts at most 10 `recovery_options`. Each option must have a `source_reference` identifying the operator's evidence/assumption. Supported option shapes are:
+
+```json
+{
+  "recovery_options": [
+    {
+      "strategy_type": "emergency_procurement",
+      "combination_name": "Protect material during supplier disruption",
+      "material_id": "<scenario-material-uuid>",
+      "supplier_id": "<supplier-uuid>",
+      "quantity": "100",
+      "lead_time_days": 8,
+      "estimated_unit_cost": "12.50",
+      "currency": "USD",
+      "source_reference": "operator quote reference"
+    },
+    {
+      "strategy_type": "inventory_redistribution",
+      "combination_name": "Protect material during supplier disruption",
+      "material_id": "<scenario-material-uuid>",
+      "source_warehouse_id": "<source-warehouse-uuid>",
+      "destination_warehouse_id": "<destination-warehouse-uuid>",
+      "quantity": "60",
+      "transfer_days": 2,
+      "estimated_transfer_cost": "250.00",
+      "currency": "USD",
+      "source_reference": "operator transfer estimate"
+    }
+  ],
+  "ranking_weights": {
+    "recovery_time": 35,
+    "cost": 25,
+    "service_level": 30,
+    "supplier_risk": 10
+  }
+}
+```
+
+For a route option, set `strategy_type` to `route_alternative`, `shipment_id` to the selected shipment UUID, `route_geometry` to a valid operator-sourced GeoJSON `LineString` or `MultiLineString`, and provide `transit_days` and `source_reference`. `estimated_transfer_cost` and its three-letter `currency` are optional. ARES does not supply sample route coordinates because they would not represent a verified shipment path.
+
+For inventory redistribution, `release_reorder_buffer` defaults to false. Transfers above the current reorder-point buffer require it to be explicitly set true. During a warehouse-failure simulation, stock can be rescued from the affected warehouse only under the stated assumption that it can move before the site becomes unavailable. Transferring stock between other warehouses changes location, not total network availability; ARES lacks location-level demand and destination-capacity data.
+
+Emergency procurement requires at least one approver-verified delivered shipment for the selected supplier/material pair and rejects blocked suppliers and the failed supplier in a supplier-failure scenario. The quantity and lead time remain assumptions. If a current unit-cost estimate is not entered, ARES may show a historical verified PO price, clearly labeled as historical rather than a current quote. Supplier candidates derived from verified history never imply current capacity or willingness.
+
+An alternate route is accepted only for the selected shipment in a `route_disruption` scenario. It requires a validated GeoJSON `LineString`/`MultiLineString`, an operator-supplied transit duration, and source reference. The simulation uses outstanding PO quantities because shipment-to-line allocations are not modeled. It does not request or derive routing, traffic, border, or carrier data.
+
+Each recovery option is evaluated by itself unless multiple entries share the same `combination_name`. A named combination applies its entries in the supplied order to one isolated projection; recovery time uses the slowest component under an explicit parallel-execution assumption. Combined cost is shown only when every component has an estimate in the same currency. Transfer limits are enforced cumulatively within the combination.
+
+The default ranking weights are recovery time 35%, cost 25%, service-level coverage 30%, and supplier risk 10%. `ranking_weights` can override them, but must provide all four keys and sum to 100. The API reports metric components and weight coverage for each score. Recovery-time scores are omitted when only one candidate has a time value. Cost scores are compared only when at least two candidates share both currency and cost basis. Service coverage is a horizon/scenario quantity measure where ARES has enough projection data; it is not customer on-time delivery. Current supplier risk uses the stored ARES score. The weighted score is relative to the candidates in that saved comparison, not a confidence or probability.
+
+`result.recovery_comparison.strategies` includes operator scenarios and up to 50 automatically derived supplier/redistribution candidates. Automatic supplier alternatives are based on delivered shipment outcomes marked verified in ARES. Result evidence includes verified delivery counts, observed lead-time history, and historical cost limitations; unavailable data is not estimated. The saved comparison also reports unavailable option types and the number of automatic candidates omitted by the result bound. Returned `material_projection_after_recovery` values let the UI compare baseline scenario availability with each option's assumed availability.
+
+Options and combinations are saved inside the user's `DigitalTwinSimulation` result for audit and review. This is not predictive AI or operational execution; it is deterministic scenario arithmetic over recorded data and explicitly supplied assumptions.
+
 ## Synchronization and recovery
 
 Signals append a monotonically increasing `DigitalTwinChangeEvent` for changes to suppliers, warehouses, materials, inventory/movements, POs/lines, shipments, disruptions, external-feed records, response plans/actions, and action executions. After database commit, the existing authenticated Channels group receives resource/action/sequence metadata; record contents remain behind the authenticated API.

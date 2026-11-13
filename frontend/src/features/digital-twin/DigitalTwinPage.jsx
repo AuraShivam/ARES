@@ -27,6 +27,12 @@ const SCENARIOS = [
   ['material_shortage', 'Material shortage', 'material'],
   ['demand_surge', 'Demand surge', 'material'],
 ]
+const RANKING_OBJECTIVES = {
+  balanced: { recovery_time: 35, cost: 25, service_level: 30, supplier_risk: 10 },
+  fastest: { recovery_time: 65, cost: 10, service_level: 20, supplier_risk: 5 },
+  lowest_cost: { recovery_time: 15, cost: 60, service_level: 20, supplier_risk: 5 },
+  service_first: { recovery_time: 20, cost: 10, service_level: 60, supplier_risk: 10 },
+}
 
 setWorkerUrl(workerUrl)
 
@@ -178,6 +184,45 @@ function EntityPanel({ node, detail, busy, onAnalyze }) {
   </div>
 }
 
+function RecoveryComparison({ comparison }) {
+  if (!comparison) return null
+  const weights = comparison.ranking_policy?.weights || {}
+  return <section className="twin-recovery-comparison">
+    <div className="twin-recovery-heading"><div><strong>Recovery strategy comparison</strong><small>Hypothetical results; rankings use only recorded evidence and supplied assumptions.</small></div><span>{comparison.strategies?.length || 0} candidates</span></div>
+    <p className="twin-data-note">Objective weights · {Object.entries(weights).map(([key, value]) => `${key.replaceAll('_', ' ')} ${value}%`).join(' · ')}. Scores compare the candidates in this scenario; they are not probabilities. Missing or incomparable metrics are omitted, and score coverage shows how much weight was evaluated.</p>
+    <div className="twin-recovery-list">{comparison.strategies?.slice(0, 12).map((strategy) => {
+      const metrics = strategy.metrics || {}
+      const ranking = strategy.ranking || {}
+      const coverage = metrics.service_level_percent
+      return <article className="twin-recovery-option" key={strategy.id}>
+        <div className="twin-recovery-option-title"><div><strong>{ranking.rank ? `#${ranking.rank} · ` : ''}{strategy.name}</strong><small>{strategy.status?.replaceAll('_', ' ') || 'candidate'}{ranking.score !== null && ranking.score !== undefined ? ` · score ${ranking.score}/100 · ${ranking.ranked_weight_percent}% weight coverage` : ''}</small></div>{strategy.supplier?.risk_score !== undefined && <span>Supplier risk {strategy.supplier.risk_score}/100</span>}</div>
+        <div className="twin-recovery-metrics">
+          {metrics.recovery_days !== null && metrics.recovery_days !== undefined && <span>{strategy.status === 'candidate_for_review' ? 'Median verified lead' : 'Recovery'} · {metrics.recovery_days} days</span>}
+          {metrics.estimated_cost !== null && metrics.estimated_cost !== undefined && <span>Estimated cost · {metrics.estimated_cost} {metrics.currency || ''}</span>}
+          {metrics.cost_basis && <span>Cost basis · {metrics.cost_basis.replaceAll('_', ' ')}</span>}
+          {coverage !== null && coverage !== undefined && <span>Scenario coverage · {Number(coverage).toFixed(1)}%</span>}
+          {metrics.quantity_available_to_rescue && <span>Stock identified · {metrics.quantity_available_to_rescue}</span>}
+          {strategy.evidence?.verified_deliveries !== undefined && <span>Verified deliveries · {strategy.evidence.verified_deliveries}</span>}
+          {strategy.evidence?.historical_max_order_quantity && <span>Largest verified order · {strategy.evidence.historical_max_order_quantity}</span>}
+          {strategy.result?.route_distance_km !== undefined && <span>Route length · {strategy.result.route_distance_km} km</span>}
+          {strategy.result?.days_saved_vs_scenario !== null && strategy.result?.days_saved_vs_scenario !== undefined && <span>Days saved · {strategy.result.days_saved_vs_scenario}</span>}
+        </div>
+        {strategy.evidence?.source_reference && <div className="twin-recovery-components"><strong>Operator source reference</strong><span>{strategy.evidence.source_reference}</span></div>}
+        {strategy.result?.components?.length > 0 && <div className="twin-recovery-components"><strong>Combined actions</strong>{strategy.result.components.map((component) => <div key={`${component.strategy_type}-${component.name}`}><span>{component.name}{component.evidence?.source_reference ? ` · ${component.evidence.source_reference}` : ''}</span>{component.limitations?.map((note) => <small className="twin-recovery-limitation" key={note}>{note}</small>)}</div>)}</div>}
+        {strategy.result?.material_projection_after_recovery?.length > 0 && <div className="twin-recovery-projections"><strong>Projected availability after this option</strong>{strategy.result.material_projection_after_recovery.slice(0, 5).map((after) => {
+          const before = comparison.baseline?.material_projections?.find((row) => row.material_id === after.material_id)
+          const beforeValue = before?.simulated?.projected_available ?? before?.simulated?.supply_only_available
+          const afterValue = after.simulated?.projected_available ?? after.simulated?.supply_only_available
+          return <span key={after.material_id}>{after.sku} · {beforeValue ?? 'unknown'} → {afterValue ?? 'unknown'} {after.unit}</span>
+        })}{strategy.result.material_projection_after_recovery.length > 5 && <small>{strategy.result.material_projection_after_recovery.length - 5} additional materials are in the saved result.</small>}</div>}
+        {strategy.limitations?.map((note) => <small className="twin-recovery-limitation" key={note}>{note}</small>)}
+      </article>
+    })}</div>
+    {comparison.omitted_automatic_candidates > 0 && <p className="twin-data-note">Showing up to {comparison.automatic_candidate_limit} automatic evidence candidates; {comparison.omitted_automatic_candidates} additional candidates were omitted to keep the result bounded.</p>}
+    {comparison.unavailable_strategies?.map((item) => <p className="twin-data-note" key={`${item.strategy_type}-${item.reason}`}>{item.strategy_type.replaceAll('_', ' ')} · {item.reason}</p>)}
+  </section>
+}
+
 export default function DigitalTwinPage({ data, loading, liveUpdates }) {
   const [graph, setGraph] = useState({ nodes: [], edges: [], pagination: { page: 1, page_count: 1, count: 0 }, graph_counts: {} })
   const [pageLoading, setPageLoading] = useState(false)
@@ -195,6 +240,8 @@ export default function DigitalTwinPage({ data, loading, liveUpdates }) {
   const [scenarioValue, setScenarioValue] = useState('7')
   const [simulation, setSimulation] = useState(null)
   const [simulationBusy, setSimulationBusy] = useState(false)
+  const [recoveryOptionsText, setRecoveryOptionsText] = useState('[]')
+  const [rankingObjective, setRankingObjective] = useState('balanced')
   const [geoTypeFilter, setGeoTypeFilter] = useState('all')
   const [geoSearch, setGeoSearch] = useState('')
   const [pageError, setPageError] = useState('')
@@ -284,6 +331,10 @@ export default function DigitalTwinPage({ data, loading, liveUpdates }) {
     if (scenarioType === 'material_shortage') body.shortage_quantity = scenarioValue
     if (scenarioType === 'demand_surge') body.demand_increase_percent = scenarioValue
     try {
+      const recoveryOptions = JSON.parse(recoveryOptionsText)
+      if (!Array.isArray(recoveryOptions)) throw new Error('Recovery options must be a JSON array.')
+      if (recoveryOptions.length) body.recovery_options = recoveryOptions
+      body.ranking_weights = RANKING_OBJECTIVES[rankingObjective]
       const saved = await request('/digital-twin/simulations/', { method: 'POST', body: JSON.stringify(body) })
       setSimulation(saved)
     } catch (error) { setPageError(error.message) }
@@ -424,14 +475,17 @@ export default function DigitalTwinPage({ data, loading, liveUpdates }) {
         {(scenarioType === 'shipment_delay' || scenarioType === 'route_disruption') && <label>Delay (days)<input type="number" min="1" max="365" value={scenarioValue} onChange={(event) => setScenarioValue(event.target.value)} /></label>}
         {scenarioType === 'material_shortage' && <label>Shortage quantity<input type="number" min="0" step="0.01" value={scenarioValue} onChange={(event) => setScenarioValue(event.target.value)} /></label>}
         {scenarioType === 'demand_surge' && <label>Demand increase (%)<input type="number" min="0" max="1000" step="0.01" value={scenarioValue} onChange={(event) => setScenarioValue(event.target.value)} /></label>}
+        <label>Recovery objective<select value={rankingObjective} onChange={(event) => setRankingObjective(event.target.value)}><option value="balanced">Balanced</option><option value="fastest">Fastest recovery</option><option value="lowest_cost">Lowest cost</option><option value="service_first">Service protection</option></select></label>
         <button className="primary-button" type="submit" disabled={simulationBusy || !scenarioEntity}>{simulationBusy ? 'Simulating…' : 'Run scenario'}</button>
       </form>
+      <details className="twin-recovery-input"><summary>Add specific recovery options (optional)</summary><p>Paste up to 10 JSON options: an inventory transfer, emergency procurement from a supplier with verified delivery history, or a source-attributed alternate route. Give options the same <code>combination_name</code> to compare them as one combined plan; without it, each is simulated independently. See the digital twin guide for fields. These entries are scenario assumptions only.</p><textarea aria-label="Recovery options JSON" rows="7" spellCheck="false" value={recoveryOptionsText} onChange={(event) => setRecoveryOptionsText(event.target.value)} placeholder="[]" /></details>
       {scenarioType === 'demand_surge' && <p className="twin-data-note">Demand uplift is quantified only when the selected material has at least 60 days of movement history and 10 distinct issue dates.</p>}
       {simulation && <div className="twin-simulation-result">
         <div className="twin-result-heading"><div><span className="simulated-badge">SIMULATED</span><strong>{simulation.result?.summary?.affected_materials ?? 0} materials in scope</strong></div><small>Saved {formatDate(simulation.created_at, true)} · ID {simulation.id}</small></div>
         <div className="twin-impact-summary">{simulation.result?.summary?.purchase_orders_in_scope ?? 0} purchase orders · {simulation.result?.summary?.shipments_in_scope ?? 0} shipments · projected through {simulation.result?.horizon_end}</div>
         {simulation.result?.delayed_purchase_orders?.length > 0 && <div className="twin-delay-list"><strong>Delayed purchase orders</strong>{simulation.result.delayed_purchase_orders.map((item) => <span key={item.purchase_order}>{item.purchase_order}: {item.baseline_eta} → {item.simulated_eta}{item.deferred_beyond_horizon ? ' · beyond horizon' : ''}</span>)}</div>}
         {simulation.result?.material_projection?.map((item) => <article className="twin-material-comparison" key={item.material_id}><div><strong>{item.sku} · {item.name}</strong><span>Baseline available: {item.baseline.projected_available ?? item.baseline.supply_only_available ?? 'insufficient data'} {item.unit}</span><b>Simulated available: {item.simulated.projected_available ?? item.simulated.supply_only_available ?? 'insufficient data'} {item.unit}</b><small>{item.consequence}</small></div></article>)}
+        <RecoveryComparison comparison={simulation.result?.recovery_comparison} />
         {simulation.result?.assumptions_and_data_gaps?.map((note) => <p className="twin-data-note" key={note}>{note}</p>)}
       </div>}
     </section>
