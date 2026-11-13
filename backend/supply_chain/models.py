@@ -683,3 +683,46 @@ class AgentExecutionStep(TimestampedModel):
             name="uniq_agent_step_execution_sequence",
         )]
         indexes = [models.Index(fields=["execution", "status"], name="agent_step_exec_status_idx")]
+
+
+class PredictiveEvaluationRun(TimestampedModel):
+    """Persisted, chronological model evaluation; does not mutate supply-chain records."""
+
+    MODEL_TYPES = [
+        ("shipment_delay", "Shipment delay"),
+        ("material_demand", "Material demand"),
+    ]
+    STATUSES = [
+        ("running", "Running"),
+        ("completed", "Completed"),
+        ("insufficient_data", "Insufficient data"),
+        ("failed", "Failed"),
+    ]
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ares_predictive_evaluations",
+    )
+    model_type = models.CharField(max_length=24, choices=MODEL_TYPES)
+    status = models.CharField(max_length=20, choices=STATUSES, default="running")
+    model_version = models.CharField(max_length=120)
+    as_of_date = models.DateField()
+    holdout_start_date = models.DateField(null=True, blank=True)
+    holdout_end_date = models.DateField(null=True, blank=True)
+    sample_count = models.PositiveIntegerField(default=0)
+    data_fingerprint = models.CharField(max_length=64, blank=True)
+    parameters = models.JSONField(default=dict, blank=True)
+    metrics = models.JSONField(default=dict, blank=True)
+    error_code = models.CharField(max_length=80, blank=True)
+    error_message = models.CharField(max_length=500, blank=True)
+    duration_ms = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["model_type", "status"], name="pred_eval_type_status_idx"),
+            models.Index(fields=["created_at"], name="pred_eval_created_idx"),
+        ]

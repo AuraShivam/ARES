@@ -61,6 +61,7 @@ def _verified_deliveries():
     return list(
         Shipment.objects.filter(
             delivery_outcome_verified=True,
+            delivery_outcome_verified_at__isnull=False,
             status="delivered",
             eta__isnull=False,
             actual_delivery_date__isnull=False,
@@ -89,6 +90,8 @@ def _features_for(shipment, verified_deliveries):
         if item.pk != shipment.pk
         and item.purchase_order.supplier_id == supplier_id
         and item.actual_delivery_date < order_date
+        and item.delivery_outcome_verified_at is not None
+        and timezone.localtime(item.delivery_outcome_verified_at).date() < order_date
     ]
     recent_start = order_date - timedelta(days=180)
     recent = [item for item in prior if item.actual_delivery_date >= recent_start]

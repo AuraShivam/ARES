@@ -119,7 +119,11 @@ REST_FRAMEWORK = {
         if DEBUG else ["rest_framework.renderers.JSONRenderer"]
     ),
     "EXCEPTION_HANDLER": "config.api_errors.api_exception_handler",
-    "DEFAULT_THROTTLE_RATES": {"auth_login": "10/hour", "ares_agent_execution": "5/hour"},
+    "DEFAULT_THROTTLE_RATES": {
+        "auth_login": "10/hour",
+        "ares_agent_execution": "5/hour",
+        "predictive_evaluation": "2/hour",
+    },
 }
 ARES_API_TOKEN_TTL_HOURS = max(1, int(os.getenv("ARES_API_TOKEN_TTL_HOURS", "8")))
 ARES_EMAIL_DELIVERY_ENABLED = os.getenv("ARES_EMAIL_DELIVERY_ENABLED", "false").lower() == "true"

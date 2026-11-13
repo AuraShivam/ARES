@@ -9,6 +9,7 @@ from supply_chain.agents.api import (
     data_readiness as agent_data_readiness,
 )
 from supply_chain.digital_twin import api as digital_twin_api
+from supply_chain.predictive_evaluation_api import predictive_evaluation_detail, predictive_evaluations
 from supply_chain.views import (
     AuditEventViewSet, DisruptionViewSet, InventoryMovementViewSet, InventoryViewSet,
     MaterialViewSet, NotificationDeliveryViewSet, PurchaseOrderLineViewSet, PurchaseOrderViewSet,
@@ -41,6 +42,8 @@ urlpatterns = [
     path("api/auth/me/", current_user, name="api-current-user"),
     path("api/auth/logout/", logout, name="api-logout"),
     path("api/inventory/forecast/", inventory_forecast, name="inventory-forecast"),
+    path("api/models/evaluations/", predictive_evaluations, name="predictive-evaluations"),
+    path("api/models/evaluations/<uuid:evaluation_id>/", predictive_evaluation_detail, name="predictive-evaluation-detail"),
     path("api/ai/status/", agent_status, name="ai-status"),
     path("api/ai/data-readiness/", agent_data_readiness, name="ai-data-readiness"),
     path("api/ai/tools/", agent_tools, name="ai-tools"),

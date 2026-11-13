@@ -122,4 +122,4 @@ The runtime is disabled by default. To enable external processing, an operator m
 
 ## Next phase
 
-Phase 4 focuses on chronological predictive-model evaluation and persisted evaluation metrics. Keep provider calls opt-in and write-capable tools disabled until review, approval, and audit controls are implemented.
+Phase 4 adds chronological model evaluation through `POST /api/models/evaluations/` and `python manage.py evaluate_predictive_models`. Runs compare both current predictors with transparent baselines, persist holdout metrics and a SHA-256 data fingerprint, and return an explicit insufficient-data result when evaluation thresholds are not met. See the [predictive model evaluation guide](predictive-model-evaluation.md). Provider calls remain opt-in and operational writes remain outside this evaluation workflow.

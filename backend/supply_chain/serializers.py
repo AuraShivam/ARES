@@ -10,6 +10,7 @@ from .models import (
     AuditEvent, Disruption, Inventory, InventoryMovement, Material, PurchaseOrder,
     NotificationDelivery, PurchaseOrderLine, ResponseAction, ResponseActionExecution,
     ResponsePlan, RiskAlert, RiskAssessmentSnapshot, RiskOutcome, Shipment, Supplier, Warehouse,
+    PredictiveEvaluationRun,
 )
 
 
@@ -390,6 +391,20 @@ class RiskOutcomeSerializer(serializers.ModelSerializer):
         model = RiskOutcome
         fields = "__all__"
         read_only_fields = ("reviewed_by", "reviewed_at", "created_at", "updated_at")
+
+
+class PredictiveEvaluationRunSerializer(serializers.ModelSerializer):
+    requested_by_username = serializers.CharField(source="requested_by.username", read_only=True, default=None)
+
+    class Meta:
+        model = PredictiveEvaluationRun
+        fields = (
+            "id", "created_at", "updated_at", "requested_by", "requested_by_username",
+            "model_type", "status", "model_version", "as_of_date", "holdout_start_date",
+            "holdout_end_date", "sample_count", "data_fingerprint", "parameters", "metrics",
+            "error_code", "error_message", "duration_ms",
+        )
+        read_only_fields = fields
 
 
 class RiskOutcomeUpsertSerializer(serializers.Serializer):

@@ -20,6 +20,8 @@ Safety stock uses `1.65 × daily-demand standard deviation × √lead time` (an 
 
 `model_confidence` describes data coverage only. It is not a calibrated probability that the forecast is correct. The forecasts assume the imported issue history is complete and representative; missing usage records, changing production plans, seasonality beyond the modeled weekday pattern, supplier allocation, and unrecorded receipts can materially change results. Possible idle stock means no issue movement is recorded for 90 days after at least 90 days of history; it is a review cue, not a determination of obsolescence.
 
+To compare forecast quality with a weekly seasonal-naive baseline, run the [chronological model-evaluation workflow](../engineering/predictive-model-evaluation.md). Backfilled movement rows recorded after a historical cutoff are excluded from that run's training window.
+
 ## API
 
 - `GET /api/inventory/forecast/` returns all material forecasts, the supported horizons, the as-of date, readiness counts, model method, and limitations. The endpoint requires an authenticated ARES account.
