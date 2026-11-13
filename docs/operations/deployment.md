@@ -1,14 +1,14 @@
 # ARES deployment and operations
 
-The primary Phase 8 demo target is localhost. The repository also includes a provider-neutral production Compose package for a future hosted deployment. No cloud account, domain, database, or secret is provisioned by this repository.
+The primary demonstration target is localhost. The repository also includes a provider-neutral production Compose package for a future hosted deployment. No cloud account, domain, database, or secret is provisioned by this repository.
 
 ## Run the local demonstration
 
-Install Docker Desktop (including Compose) on the demo machine, then from the repository root:
+Install Docker Desktop (including Compose) on the demo machine, then from the repository root. The guarded copy preserves an existing local `.env.demo`:
 
 ```sh
 umask 077
-cp .env.demo.example .env.demo
+if [ ! -f .env.demo ]; then cp .env.demo.example .env.demo; fi
 chmod 600 .env.demo
 docker compose --env-file .env.demo -f compose.demo.yaml up --build -d
 docker compose --env-file .env.demo -f compose.demo.yaml ps
@@ -23,9 +23,11 @@ Create an administrator interactively:
 docker compose --env-file .env.demo -f compose.demo.yaml exec api python manage.py createsuperuser
 ```
 
-To add realistic sample records after creating the admin account, run `docker compose --env-file .env.demo -f compose.demo.yaml exec api python manage.py seed_demo`.
+To add synthetic sample records after creating the admin account, run `docker compose --env-file .env.demo -f compose.demo.yaml exec api python manage.py seed_demo`.
 
 Then sign in, check the overview and supply-chain records, and review the GDACS feed status. The first backup worker cycle creates a PostgreSQL archive in a local named volume; allow up to 10 minutes for its health check. Email and external action execution remain disabled. To stop the demo while preserving its database and backup volumes, run `docker compose --env-file .env.demo -f compose.demo.yaml down`. **Do not use `down -v` unless you intend to erase the local demo database and backups.**
+
+Use the [local demo walkthrough](demo-walkthrough.md) for a timed presenter sequence and guidance on seeded records, GDACS, model readiness, AI-provider boundaries, and safe interpretation.
 
 GitHub is appropriate for the repository, collaboration, and build automation. GitHub Pages serves static files and cannot run the Django API, background workers, or PostgreSQL needed for a live ARES demo. A static UI preview there would not be a working application.
 
@@ -50,7 +52,7 @@ GitHub is appropriate for the repository, collaboration, and build automation. G
 
    ```sh
    umask 077
-   cp .env.production.example .env.production
+   if [ ! -f .env.production ]; then cp .env.production.example .env.production; fi
    chmod 600 .env.production
    ```
 

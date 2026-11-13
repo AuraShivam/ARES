@@ -52,7 +52,7 @@ Risk rules and both ML models provide **advisory** results. Shipment predictions
 
 ## Run the local demonstration
 
-The recommended demo runs on `http://localhost:8080` using Docker Compose, with PostgreSQL and Redis isolated in the local Compose network. Follow the [deployment and operations guide](docs/operations/deployment.md) for Docker Desktop setup, local configuration, administrator creation, demo data, and safe shutdown. The demo is loopback-only; GitHub Pages cannot run the Django API, workers, or PostgreSQL database.
+The recommended demo runs on `http://localhost:8080` using Docker Compose, with PostgreSQL and Redis isolated in the local Compose network. Follow the [local demo walkthrough](docs/operations/demo-walkthrough.md) for a presenter flow and the [deployment and operations guide](docs/operations/deployment.md) for setup, operations, backup, recovery, and safe shutdown. The demo is loopback-only; GitHub Pages cannot run the Django API, workers, or PostgreSQL database.
 
 ## Repository map
 
@@ -62,7 +62,7 @@ The recommended demo runs on `http://localhost:8080` using Docker Compose, with 
 ├── frontend/                React + Vite dashboard
 ├── docs/
 │   ├── engineering/          Architecture, security, and testing guides
-│   ├── operations/           Local demo, deployment, and roadmap guides
+│   ├── operations/           Local demo walkthrough, deployment runbook, and roadmap
 │   ├── product/              Feature and data onboarding guides
 │   └── references/           Historical project documents (local PDFs ignored by Git)
 ├── ops/                     PostgreSQL backup and guarded restore scripts
@@ -84,6 +84,7 @@ The ignored `.local/archive/legacy-sap-purchase-order-project/` folder preserves
 - [Security and quality](docs/engineering/security-quality.md)
 - [Testing guide](docs/engineering/testing.md)
 - [Deployment, backups, and recovery](docs/operations/deployment.md)
+- [Local demo walkthrough and presenter flow](docs/operations/demo-walkthrough.md)
 - [Agent runtime, provider setup, and data boundaries](docs/engineering/agentic-ai-foundation.md)
 - [Project roadmap and current phase status](docs/operations/roadmap.md)
 - [Historical reference documents](docs/references/README.md)

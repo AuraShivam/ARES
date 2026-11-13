@@ -123,6 +123,28 @@ The runtime is disabled by default. To enable external processing, an operator m
 
 `configured` means the settings are complete, not that the provider is reachable, the model is available, or the account has quota. No live provider request is made by default. The workflow is synchronous and sequential; it does not run specialists in parallel and does not provide cancellation or background execution. Write tools and automated actions remain later work.
 
+### Optional local provider configuration
+
+The standard demo does not require an AI provider. Only configure one when a live agent call is part of the demonstration and the data owner has approved sending the selected question and ARES evidence to that provider. The repository currently implements the `openai_responses` adapter only.
+
+Edit the ignored root `.env.demo` file in a local editor and set the provider-issued model and API key without putting the key in shell history or source control:
+
+```dotenv
+ARES_AGENT_PROVIDER=openai_responses
+ARES_AGENT_MODEL=<provider-issued-model-id>
+ARES_AGENT_API_KEY=<provider-issued-secret>
+ARES_AGENT_API_BASE_URL=https://api.openai.com/v1
+ARES_AGENT_EXTERNAL_PROCESSING_ENABLED=true
+```
+
+Replace the placeholder values; do not copy them literally. Keep the key private and use only approved demo data. Then recreate the API container so Compose loads the updated environment:
+
+```sh
+docker compose --env-file .env.demo -f compose.demo.yaml up -d --force-recreate api
+```
+
+Check **AI control center** and read the external-processing notice before submitting anything. A `configured` status is not a reachability check; one intentionally submitted bounded analysis is required to verify the connection. Provider calls can incur charges. Afterward, set `ARES_AGENT_PROVIDER=disabled`, clear the model/key/base URL values, set `ARES_AGENT_EXTERNAL_PROCESSING_ENABLED=false`, and recreate the API if the provider should no longer be available.
+
 ## Phase 4: predictive model evaluation
 
 Chronological model evaluation is available through `POST /api/models/evaluations/` and `python manage.py evaluate_predictive_models`. Runs compare both current predictors with transparent baselines, persist holdout metrics and a SHA-256 data fingerprint, and return an explicit insufficient-data result when evaluation thresholds are not met. See the [predictive model evaluation guide](predictive-model-evaluation.md). Provider calls remain opt-in and operational writes remain outside this evaluation workflow.

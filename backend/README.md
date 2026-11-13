@@ -4,6 +4,8 @@ ARES (Autonomous Resilient Enterprise Supply Chain) is a hackfest MVP for supply
 
 For repository-level orientation, see the [architecture guide](../docs/engineering/architecture.md) and [delivery roadmap](../docs/operations/roadmap.md).
 
+For a repeatable localhost demonstration, see the [demo walkthrough](../docs/operations/demo-walkthrough.md). It identifies the sample records as synthetic and explains the runtime and provider checks that remain environment-dependent.
+
 ## Current scope
 
 - Django REST APIs for suppliers, materials, warehouses, inventory, purchase orders and their line items, shipments, disruptions, inventory movements, and audit history.
@@ -15,7 +17,7 @@ For repository-level orientation, see the [architecture guide](../docs/engineeri
 - Approver-reviewed incident outcomes and a descriptive report for comparing historical labels with the latest risk scores.
 - An idempotent email outbox for risk and response-plan events, plus audited dry-run and explicitly approved webhook execution for selected response actions.
 - Responsive React dashboard for network signals, demand planning, operational records, disruption assessment, creating disruptions and multi-line purchase orders, recording inventory movements, and previewing/committing validated CSV imports.
-- Optional bounded specialist and coordinator runtime with authenticated execution APIs, persisted workflow stages, evidence-checked results, and read-only operational-data tools. It is disabled by default and sends data to an external provider only after explicit environment opt-in; no agent control-center UI is implemented yet.
+- Optional bounded specialist and coordinator runtime with authenticated execution APIs, persisted workflow stages, evidence-checked results, prompt/policy version metadata, lifecycle audit events, and read-only operational-data tools. The React AI Control Center displays readiness, saved execution stages, and model evaluations. The provider is disabled by default and sends data externally only after explicit environment opt-in.
 - Interactive world map for recorded shipment endpoints, optional source-attributed shipment paths, and active GDACS points/polygons with event metadata. Endpoint connectors are distinct from actual supplied paths; ARES does not infer coordinates or routes from free-text locations.
 - PostgreSQL stores ARES application data. The MVP supports records entered through its APIs, dashboard forms, and demo-data command.
 
