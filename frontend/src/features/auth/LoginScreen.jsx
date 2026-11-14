@@ -11,7 +11,7 @@ export default function LoginScreen({ error, saving, onLogin }) {
 
   return <main className="auth-screen">
     <section className="auth-card" aria-labelledby="auth-title">
-      <div className="auth-brand"><span className="brand-mark">A</span><span className="brand-copy"><strong>ARES</strong><small>SUPPLY CHAIN INTELLIGENCE</small></span></div>
+      <div className="auth-brand"><span className="brand-mark"><img src="/brand/ares-app-icon.svg" alt="" aria-hidden="true" /></span><span className="brand-copy"><strong>ARES</strong><small>SUPPLY CHAIN INTELLIGENCE</small></span></div>
       <p className="eyebrow">SECURE WORKSPACE</p>
       <h1 id="auth-title">Sign in to ARES</h1>
       <p className="auth-description">Use your ARES account to view supply-chain data and manage response work.</p>

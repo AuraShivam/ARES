@@ -89,6 +89,7 @@ For the rationale behind these boundaries, what belongs in each area, and how to
 ## Guides
 
 - [Architecture and request flow](docs/engineering/architecture.md)
+- [ARES logo assets and usage](docs/engineering/brand-assets.md)
 - [Supply-chain digital twin](docs/engineering/digital-twin.md)
 - [Backend setup and API reference](backend/README.md)
 - [Shipment and disruption risk intelligence](docs/product/risk-intelligence.md)

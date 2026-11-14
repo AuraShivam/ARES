@@ -562,7 +562,7 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand" href="#overview" onClick={(event) => { event.preventDefault(); navigate('overview') }}>
-          <span className="brand-mark">A</span>
+          <span className="brand-mark"><img src="/brand/ares-app-icon.svg" alt="" aria-hidden="true" /></span>
           <span className="brand-copy"><strong>ARES</strong><small>SUPPLY CHAIN INTELLIGENCE</small></span>
         </a>
         <div className="workspace-pill"><span className="workspace-dot" /> <span>DEMO NETWORK</span><span className="workspace-chevron">⌄</span></div>

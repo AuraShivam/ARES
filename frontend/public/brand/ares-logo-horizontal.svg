@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 510 120" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">ARES Supply Chain Intelligence</title>
+  <desc id="desc">ARES logo with a network A symbol and supply-chain intelligence wordmark.</desc>
+  <g transform="translate(5 2) scale(.92)">
+    <path d="M64 10 104 33v46l-40 23-40-23V33L64 10Z" stroke="#142D32" stroke-width="7" stroke-linejoin="round"/>
+    <path d="m42 78 22-43 22 43M52 61h24" stroke="#142D32" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M31 69c16 13 48 16 67-2" stroke="#08A9A0" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="64" cy="10" r="7" fill="#08A9A0" stroke="#fff" stroke-width="3"/><circle cx="104" cy="33" r="7" fill="#08A9A0" stroke="#fff" stroke-width="3"/>
+    <circle cx="104" cy="79" r="7" fill="#08A9A0" stroke="#fff" stroke-width="3"/><circle cx="64" cy="102" r="7" fill="#08A9A0" stroke="#fff" stroke-width="3"/>
+    <circle cx="24" cy="79" r="7" fill="#08A9A0" stroke="#fff" stroke-width="3"/><circle cx="24" cy="33" r="7" fill="#08A9A0" stroke="#fff" stroke-width="3"/>
+    <path d="M87 47h9v13h-9zM99 41h9v19h-9z" fill="#F2A13A"/>
+  </g>
+  <text x="125" y="73" fill="#142D32" font-family="Avenir Next, Inter, Arial, sans-serif" font-size="57" font-weight="800" letter-spacing="5">ARES</text>
+  <text x="129" y="98" fill="#597276" font-family="Avenir Next, Inter, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3.2">SUPPLY CHAIN INTELLIGENCE</text>
+</svg>
